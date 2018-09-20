@@ -1,4 +1,4 @@
-package main
+package spis1
 
 import "encoding/xml"
 

@@ -15,7 +15,7 @@ func TestNewSP1RespZekFrom(t *testing.T) {
 	}
 	defer f.Close()
 
-	r, err := NewSP1RespZekFrom(f)
+	r, err := NewS1RespZekFrom(f)
 	if err != nil {
 		t.Fatal("could not create Sp1RespZek:", err)
 	}

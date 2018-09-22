@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 type RespMap map[string]string
@@ -30,14 +31,15 @@ func BrowseRespDir(dirname string) (RespMap, error) {
 	return res, nil
 }
 
-type TransactionMap map[string]Transaction
-
-func BrowseReqDir(dirname string, responses RespMap) (TransactionMap, error) {
+func BrowseReqDir(dirname string, responses RespMap) (Transactions, error) {
 	list, err := ioutil.ReadDir(dirname)
 	if err != nil {
 		return nil, err
 	}
-	res := make(TransactionMap)
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].ModTime().Before(list[j].ModTime())
+	})
+	res := Transactions{}
 	for _, fi := range list {
 		if fi.IsDir() {
 			continue
@@ -51,7 +53,11 @@ func BrowseReqDir(dirname string, responses RespMap) (TransactionMap, error) {
 			log.Println(err)
 			continue
 		}
-		t := Transaction{Req: req}
+		t := Transaction{
+			Name: filename,
+			Date: fi.ModTime(),
+			Req:  req,
+		}
 		respfile, found := responses[filename]
 		if found {
 			resp, err := newRespFromFile(respfile)
@@ -60,8 +66,9 @@ func BrowseReqDir(dirname string, responses RespMap) (TransactionMap, error) {
 			} else {
 				t.Resp = resp
 			}
+			delete(responses, filename)
 		}
-		res[filename] = t
+		res = append(res, t)
 	}
 	return res, nil
 }

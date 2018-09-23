@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 type RespMap map[string]string
@@ -36,6 +37,7 @@ func BrowseReqDir(dirname string, responses RespMap) (Transactions, error) {
 	if err != nil {
 		return nil, err
 	}
+	// TODO Change ReadDir to retreive chronologically sorted list directly
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].ModTime().Before(list[j].ModTime())
 	})
@@ -53,18 +55,19 @@ func BrowseReqDir(dirname string, responses RespMap) (Transactions, error) {
 			log.Println(err)
 			continue
 		}
+
 		t := Transaction{
 			Name: filename,
-			Date: fi.ModTime(),
-			Req:  req,
 		}
+		t.Request.UpdateFrom(fi.ModTime(), req)
+
 		respfile, found := responses[filename]
 		if found {
-			resp, err := newRespFromFile(respfile)
+			resp, datefile, err := newRespFromFile(respfile)
 			if err != nil {
 				log.Println(err)
 			} else {
-				t.Resp = resp
+				t.Response.UpdateFrom(datefile, resp)
 			}
 			delete(responses, filename)
 		}
@@ -86,15 +89,19 @@ func newReqFromFile(filename string) (*spis4.S4ReqZek, error) {
 	return req, nil
 }
 
-func newRespFromFile(filename string) (*spis4.S4RespZek, error) {
+func newRespFromFile(filename string) (*spis4.S4RespZek, time.Time, error) {
 	fresp, err := os.Open(filename)
 	if err != nil {
-		return nil, fmt.Errorf("could not open '%s', %s", filename, err)
+		return nil, time.Time{}, fmt.Errorf("could not open '%s', %s", filename, err)
 	}
 	defer fresp.Close()
+	fi, err := fresp.Stat()
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("could not get stat from '%s', %s", filename, err)
+	}
 	resp, err := spis4.NewS4RespZekFrom(fresp)
 	if err != nil {
-		return nil, fmt.Errorf("could not read S4 Resp from '%s', %s", filename, err)
+		return nil, time.Time{}, fmt.Errorf("could not read S4 Resp from '%s', %s", filename, err)
 	}
-	return resp, nil
+	return resp, fi.ModTime(), nil
 }

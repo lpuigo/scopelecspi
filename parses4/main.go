@@ -20,5 +20,7 @@ func main() {
 		log.Fatal("could not create transaction list:", err)
 	}
 
-	fmt.Printf("%v", transactions)
+	for _, t := range transactions {
+		fmt.Printf("%s", t.String())
+	}
 }

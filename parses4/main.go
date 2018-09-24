@@ -2,20 +2,39 @@ package main
 
 import (
 	"fmt"
+	"github.com/lpuig/scopelecspi/config"
 	"github.com/lpuig/scopelecspi/parses4/browser"
 	"log"
 )
 
-const reqDir = `C:\Users\Laurent\Google Drive (laurent.puig@gmail.com)\Travail\SCOPELEC\SPI\Perf Talea\S4`
-const respDir = `C:\Users\Laurent\Google Drive (laurent.puig@gmail.com)\Travail\SCOPELEC\SPI\Perf Talea\S4\Response`
+const (
+	reqDir     = `C:\Users\Laurent\Google Drive (laurent.puig@gmail.com)\Travail\SCOPELEC\SPI\Perf Talea\S4`
+	respDir    = `C:\Users\Laurent\Google Drive (laurent.puig@gmail.com)\Travail\SCOPELEC\SPI\Perf Talea\S4\Response`
+	configFile = `./config.json`
+)
+
+type Conf struct {
+	RequestDir  string
+	ResponseDir string
+}
 
 func main() {
-	responseFiles, err := browser.BrowseRespDir(respDir)
+
+	conf := Conf{
+		RequestDir:  reqDir,
+		ResponseDir: respDir,
+	}
+
+	if err := config.SetFromFile(configFile, &conf); err != nil {
+		log.Fatal(err)
+	}
+
+	responseFiles, err := browser.BrowseRespDir(conf.ResponseDir)
 	if err != nil {
 		log.Fatal("could not browse Response Directory", err)
 	}
 
-	transactions, err := browser.BrowseReqDir(reqDir, responseFiles)
+	transactions, err := browser.BrowseReqDir(conf.RequestDir, responseFiles)
 	if err != nil {
 		log.Fatal("could not create transaction list:", err)
 	}

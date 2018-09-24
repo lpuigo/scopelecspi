@@ -13,3 +13,7 @@
 
 # Idea project directory
 .idea/
+
+#default config file
+config.json
+linux/

@@ -19,7 +19,7 @@ type S4ReqZek struct {
 			Text       string `xml:",chardata"`
 			Activities struct {
 				Text string `xml:",chardata"`
-				Item struct {
+				Item []struct {
 					Text         string `xml:",chardata"`
 					SiteId       string `xml:"SiteId"`
 					ActivityId   string `xml:"ActivityId"`

@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	reqDir     = `C:\Users\Laurent\Google Drive (laurent.puig@gmail.com)\Travail\SCOPELEC\SPI\Perf Talea\S4`
-	respDir    = `C:\Users\Laurent\Google Drive (laurent.puig@gmail.com)\Travail\SCOPELEC\SPI\Perf Talea\S4\Response`
+	reqDir     = `C:\Users\Laurent\Google Drive (laurent.puig@gmail.com)\Travail\SCOPELEC\SPI\Perf Talea\S4\S4test\requests`
+	respDir    = `C:\Users\Laurent\Google Drive (laurent.puig@gmail.com)\Travail\SCOPELEC\SPI\Perf Talea\S4\S4test`
 	configFile = `./config.json`
 )
 

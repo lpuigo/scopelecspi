@@ -7,67 +7,102 @@ import (
 )
 
 type Transaction struct {
-	Name     string
-	Request  RequestInfo
-	Response ResponseInfo
+	Name        string
+	Request     RequestInfo
+	RespMissing string
+	Response    ResponseInfo
 }
 
 func (t *Transaction) String() string {
-	res := fmt.Sprintf("Transaction:%s\nRequest:%s\nResponse%s\n",
+	res := fmt.Sprintf(">> Transaction: %s\nRequest:\n%sResponse:",
 		t.Name,
 		t.Request.String(),
-		t.Response.String(),
 	)
+	if t.RespMissing != "" {
+		res += t.RespMissing + "\n\n"
+	} else {
+		res += "\n" + t.Response.String() + "\n"
+	}
 	return res
 }
 
 type Transactions []Transaction
 
-type RequestInfo struct {
-	DateFile   time.Time
+type SiteReq struct {
 	SiteID     string
+	ActivityId string
 	Attributes []string
+}
+
+type RequestInfo struct {
+	DateFile time.Time
+	Sites    []SiteReq
 }
 
 func (r *RequestInfo) UpdateFrom(date time.Time, rz *spis4.S4ReqZek) {
 	r.DateFile = date
-	r.SiteID = rz.Payload.Message.Activities.Item.SiteId
-	r.Attributes = make([]string, len(rz.Payload.Message.Activities.Item.Data.Item.Item))
-	for i, v := range rz.Payload.Message.Activities.Item.Data.Item.Item {
-		r.Attributes[i] = v.DataName
+	it := rz.Payload.Message.Activities.Item
+	var its []spis4.SiteItem
+	if len(it.Item) > 0 {
+		its = it.Item
+	} else {
+		its = []spis4.SiteItem{it}
+	}
+	r.Sites = make([]SiteReq, len(its))
+	for i, it := range its {
+		r.Sites[i].SiteID = it.SiteId
+		r.Sites[i].ActivityId = it.ActivityId
+		r.Sites[i].Attributes = make([]string, len(it.Data.Item.Item))
+		for j, v := range it.Data.Item.Item {
+			r.Sites[i].Attributes[j] = v.DataName
+		}
 	}
 }
 
 func (r *RequestInfo) String() string {
-	res := fmt.Sprintf("Request:\n\tfile date:%v\n\tSite:%s\n\tAttributes:%v\n",
+	res := fmt.Sprintf("\tfile date:%v\n\tNb Site(s):%d\n",
 		r.DateFile,
-		r.SiteID,
-		r.Attributes,
+		len(r.Sites),
 	)
+	for _, s := range r.Sites {
+		res += fmt.Sprintf("\t\tSite: %s (ActivityId: %s)\n\t\t\tAttributes: %v\n",
+			s.SiteID,
+			s.ActivityId,
+			s.Attributes,
+		)
+	}
 	return res
+}
+
+type SiteResp struct {
+	SiteID   string
+	Response string
 }
 
 type ResponseInfo struct {
 	DateFile time.Time
 	Date     string
-	SiteID   string
-	Response string
+	Site     SiteResp
 }
 
 func (r *ResponseInfo) UpdateFrom(date time.Time, rz *spis4.S4RespZek) {
 	r.DateFile = date
 	r.Date = rz.Header.TrackingHeader.Timestamp
-	r.SiteID = rz.Body.ZserUpdateActivityResponse.ActivitiesRet.Item.SiteId
+	r.Site.SiteID = rz.Body.ZserUpdateActivityResponse.ActivitiesRet.Item.SiteId
 	it := &rz.Body.ZserUpdateActivityResponse.ActivitiesRet.Item.Messages.Item
-	r.Response = fmt.Sprintf("%s:%s", it.ReturnNum, it.ReturnText)
+	if it.ReturnNum == "" && it.ReturnText == "" {
+		r.Site.Response = "<NONE>"
+	} else {
+		r.Site.Response = fmt.Sprintf("%s:%s", it.ReturnNum, it.ReturnText)
+	}
 }
 
 func (r *ResponseInfo) String() string {
-	res := fmt.Sprintf("Response:\n\tresponse date:%s\n\tfile date:%v\n\tSite:%s\n\tResponse:%s\n",
+	res := fmt.Sprintf("\tDate:%s\n\tFile date:%v\n\tSite:%s\n\tResponse:%s\n",
 		r.Date,
 		r.DateFile,
-		r.SiteID,
-		r.Response,
+		r.Site.SiteID,
+		r.Site.Response,
 	)
 	return res
 }

@@ -65,13 +65,13 @@ func BrowseReqDir(dirname string, responses RespMap) (Transactions, error) {
 		if found {
 			resp, datefile, err := newRespFromFile(respfile)
 			if err != nil {
-				t.RespMissing = "<ERROR>"
+				t.RespMissing = fmt.Sprintf("<%s>", err)
 			} else {
 				t.Response.UpdateFrom(datefile, resp)
 			}
-			delete(responses, filename)
+			//delete(responses, filename)
 		} else {
-			t.RespMissing = "<MISSING>"
+			t.RespMissing = "<AUCUNE REPONSE>"
 		}
 		res = append(res, t)
 	}

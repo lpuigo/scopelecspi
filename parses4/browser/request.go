@@ -6,15 +6,16 @@ import (
 	"time"
 )
 
-type SiteReq struct {
-	SiteID     string
-	ActivityId string
-	Attributes []string
-}
-
 type RequestInfo struct {
 	DateFile time.Time
 	Sites    []SiteReq
+}
+
+type SiteReq struct {
+	SiteID     string
+	Imb        string
+	ActivityId string
+	Attributes []string
 }
 
 func (r *RequestInfo) UpdateFrom(date time.Time, rz *spis4.S4ReqZek) {
@@ -29,6 +30,7 @@ func (r *RequestInfo) UpdateFrom(date time.Time, rz *spis4.S4ReqZek) {
 	r.Sites = make([]SiteReq, len(its))
 	for i, it := range its {
 		r.Sites[i].SiteID = it.SiteId
+		r.Sites[i].Imb = it.BuildingCode
 		r.Sites[i].ActivityId = it.ActivityId
 		r.Sites[i].Attributes = make([]string, len(it.Data.Item.Item))
 		for j, v := range it.Data.Item.Item {
@@ -43,8 +45,9 @@ func (r *RequestInfo) String() string {
 		len(r.Sites),
 	)
 	for _, s := range r.Sites {
-		res += fmt.Sprintf("\t\tSite: %s (ActivityId: %s)\n\t\t\tAttributes: %v\n",
+		res += fmt.Sprintf("\t\tSite: %s [%s] (ActivityId: %s)\n\t\t\tAttributes: %v\n",
 			s.SiteID,
+			s.Imb,
 			s.ActivityId,
 			s.Attributes,
 		)

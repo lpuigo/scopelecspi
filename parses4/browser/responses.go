@@ -6,35 +6,50 @@ import (
 	"time"
 )
 
-type SiteResp struct {
-	SiteID   string
-	Response string
-}
-
 type ResponseInfo struct {
 	DateFile time.Time
 	Date     string
-	Site     SiteResp
+	Sites    []SiteResp
+}
+
+type SiteResp struct {
+	SiteID   string
+	Imb      string
+	Activity string
+	Response string
 }
 
 func (r *ResponseInfo) UpdateFrom(date time.Time, rz *spis4.S4RespZek) {
 	r.DateFile = date
 	r.Date = rz.Header.TrackingHeader.Timestamp
-	r.Site.SiteID = rz.Body.ZserUpdateActivityResponse.ActivitiesRet.Item.SiteId
-	it := &rz.Body.ZserUpdateActivityResponse.ActivitiesRet.Item.Messages.Item
-	if it.ReturnNum == "" && it.ReturnText == "" {
-		r.Site.Response = "<NONE>"
-	} else {
-		r.Site.Response = fmt.Sprintf("%s:%s", it.ReturnNum, it.ReturnText)
+	s4RespSites := rz.Body.ZserUpdateActivityResponse.ActivitiesRet.Item
+	r.Sites = make([]SiteResp, len(s4RespSites))
+	for iRespSite, respSite := range s4RespSites {
+		r.Sites[iRespSite].SiteID = respSite.SiteId
+		r.Sites[iRespSite].Imb = respSite.BuildingCode
+		r.Sites[iRespSite].Activity = respSite.ActivityId
+		it := respSite.Messages.Item
+		if it.ReturnNum == "" && it.ReturnText == "" {
+			r.Sites[iRespSite].Response = "<REPONSE VIDE>"
+		} else {
+			r.Sites[iRespSite].Response = fmt.Sprintf("%s:%s", it.ReturnNum, it.ReturnText)
+		}
 	}
 }
 
 func (r *ResponseInfo) String() string {
-	res := fmt.Sprintf("\tDate:%s\n\tFile date:%v\n\tSite:%s\n\tResponse:%s\n",
+	res := fmt.Sprintf("\tDate:%s\n\tFile date:%v\n",
 		r.Date,
 		r.DateFile,
-		r.Site.SiteID,
-		r.Site.Response,
 	)
+	for i, site := range r.Sites {
+		res += fmt.Sprintf("\t\tSite %d:%s [%s] (activity:%s)\n\t\t\tResponse:%s\n",
+			i,
+			site.SiteID,
+			site.Imb,
+			site.Activity,
+			site.Response,
+		)
+	}
 	return res
 }

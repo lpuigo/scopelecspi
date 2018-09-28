@@ -28,20 +28,25 @@ func (t *Transaction) String() string {
 }
 
 func (t *Transaction) WriteXLSTo(sheet *xlsx.Sheet) {
-	r := sheet.AddRow()
-	r.AddCell().SetString(t.Name)
+	for i, rSite := range t.Request.Sites {
+		r := sheet.AddRow()
+		r.AddCell().SetString(t.Name)
+		r.AddCell().SetInt(i + 1)
 
-	r.AddCell().SetDateTime(t.Response.DateFile)
-	r.AddCell().SetString(t.Response.Site.SiteID)
-	r.AddCell().SetString(t.Response.Site.Response)
+		r.AddCell().SetDateTime(t.Request.DateFile)
+		r.AddCell().SetString(rSite.SiteID)
+		r.AddCell().SetString(rSite.Imb)
+		r.AddCell().SetString(rSite.ActivityId)
+		r.AddCell().SetString(strings.Join(rSite.Attributes, ","))
 
-	r.AddCell().SetDateTime(t.Request.DateFile)
-	nbSite := len(t.Request.Sites)
-	r.AddCell().SetInt(nbSite)
-	for _, s := range t.Request.Sites {
-		r.AddCell().SetString(s.SiteID)
-		r.AddCell().SetString(s.ActivityId)
-		r.AddCell().SetString(strings.Join(s.Attributes, ","))
+		r.AddCell().SetString(t.RespMissing)
+		if i < len(t.Response.Sites) {
+			r.AddCell().SetDateTime(t.Response.DateFile)
+			r.AddCell().SetString(t.Response.Sites[i].SiteID)
+			r.AddCell().SetString(t.Response.Sites[i].Imb)
+			r.AddCell().SetString(t.Response.Sites[i].Activity)
+			r.AddCell().SetString(t.Response.Sites[i].Response)
+		}
 	}
 }
 
@@ -50,21 +55,21 @@ type Transactions []Transaction
 func addTransactionSheetHeader(sheet *xlsx.Sheet) {
 	r := sheet.AddRow()
 	r.AddCell().Value = "Name"
-
-	r.AddCell().Value = "Resp_File_Date"
-	r.AddCell().Value = "Resp_Site"
-	r.AddCell().Value = "Response"
+	r.AddCell().Value = "Num"
 
 	r.AddCell().Value = "Req_File_Date"
-	r.AddCell().Value = "Req_Nb_Site"
+	r.AddCell().Value = "Req_Site"
+	r.AddCell().Value = "Req_Imb"
+	r.AddCell().Value = "Req_Activity"
+	r.AddCell().Value = "Req_Attribute"
 
-	r.AddCell().Value = "Site1"
-	r.AddCell().Value = "Activity1"
-	r.AddCell().Value = "Attribute1"
+	r.AddCell().Value = "Resp_Info"
+	r.AddCell().Value = "Resp_File_Date"
+	r.AddCell().Value = "Resp_Site"
+	r.AddCell().Value = "Resp_Imb"
+	r.AddCell().Value = "Resp_Activity"
+	r.AddCell().Value = "Response"
 
-	r.AddCell().Value = "Site2"
-	r.AddCell().Value = "Activity2"
-	r.AddCell().Value = "Attribute2"
 }
 
 func (ts Transactions) genSumarySheetTo(xlsFile *xlsx.File) error {

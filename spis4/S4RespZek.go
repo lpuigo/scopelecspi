@@ -29,7 +29,7 @@ type S4RespZek struct {
 			Ns2           string `xml:"ns2,attr"`
 			ActivitiesRet struct {
 				Text string `xml:",chardata"`
-				Item struct {
+				Item []struct {
 					Text         string `xml:",chardata"`
 					SiteId       string `xml:"SiteId"`
 					ActivityId   string `xml:"ActivityId"`

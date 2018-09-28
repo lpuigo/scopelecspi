@@ -14,6 +14,11 @@
 # Idea project directory
 .idea/
 
-#default config file
+# default config file
 config.json
+
+# default config file
 linux/
+
+# test txt files
+*.txt

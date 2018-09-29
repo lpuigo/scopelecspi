@@ -37,7 +37,9 @@ func TestParse(t *testing.T) {
 		t.Fatal("SetStartDay returns:", err)
 	}
 
-	err = Parse(f, c)
+	blockdesc := NewTopBlock()
+
+	err = Parse(f, blockdesc, c)
 	if err != nil {
 		t.Fatal("Parse returns:", err)
 	}

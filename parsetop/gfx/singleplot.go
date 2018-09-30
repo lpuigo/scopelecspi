@@ -7,6 +7,7 @@ import (
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
 	"image/color"
+	"time"
 )
 
 type SinglePlot struct {
@@ -47,7 +48,7 @@ func (sp *SinglePlot) plotLines() (p *plot.Plot, err error) {
 	}
 
 	p.Title.Text = sp.title
-	p.X.Tick.Marker = plot.TimeTicks{Format: "2006-01-02\n15:04"}
+	p.X.Tick.Marker = plot.TimeTicks{Format: "2006-01-02\n15:04", Ticker: TimeTicker{Major: 8, Minor: 15}}
 	p.X.Label.Text = "Time"
 	p.Y.Label.Text = "Values"
 
@@ -70,4 +71,34 @@ func newLine(p *plot.Plot, stats []stat.Stat, value string, c color.Color) (l *p
 	p.Add(l)
 	p.Legend.Add(value, l)
 	return
+}
+
+type TimeTicker struct {
+	Major int
+	Minor int
+}
+
+func (tt TimeTicker) Ticks(min, max float64) []plot.Tick {
+	minDur := time.Duration(tt.Minor) * time.Minute
+	minDurSec := float64(tt.Minor * 60)
+	totime := plot.UTCUnixTime
+	// find the first tick
+	starttime := totime(min)
+	roundedstarttime := starttime.Round(minDur)
+	if roundedstarttime.Before(starttime) {
+		roundedstarttime = roundedstarttime.Add(minDur)
+	}
+	value := float64(roundedstarttime.Unix())
+	ticks := []plot.Tick{}
+	for value < max {
+		tick := plot.Tick{Value: value}
+		t := totime(value)
+		if t.Round(time.Duration(tt.Minor*tt.Major) * time.Minute).Equal(t) {
+			tick.Label = "1"
+		}
+		ticks = append(ticks, tick)
+		value += minDurSec
+	}
+
+	return ticks
 }

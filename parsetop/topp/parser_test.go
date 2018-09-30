@@ -62,7 +62,7 @@ func TestPlot(t *testing.T) {
 	vector.Add(1)
 	Stats := make([]stat.Stat, 0, 1000)
 	//go stat.FillStatVector(&vector, c, &Stats)
-	go stat.FillAggregatedStatVector(&vector, c, &Stats, 180*time.Second)
+	go stat.FillAggregatedStatVector(&vector, c, &Stats, 150*time.Second)
 
 	err = SetStartDay("2018-09-27")
 	if err != nil {

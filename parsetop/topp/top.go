@@ -21,6 +21,12 @@ const (
 	topLine_Load5Pos   int    = 1
 	topLine_Load15Pos  int    = 2
 
+	cpuBlock_Header string = "%Cpu(s):"
+	cpuBlock_Wait   int    = 9
+	cpuBlock_Used   int    = 4
+	cpuBlock_Free   int    = 6
+	cpuBlock_Swap   int    = 4
+
 	processBlock_Header  string = "  PID "
 	processBlock_Virtual int    = 4
 	processBlock_Memory  int    = 5
@@ -34,6 +40,10 @@ func NewTopParserDef() *ParserDef {
 			chapter{
 				Found: foundTopBlock,
 				Parse: parseTopBlock,
+			},
+			chapter{
+				Found: foundCPUBlock,
+				Parse: parseCPUBlock,
 			},
 			chapter{
 				Found: foundProcessBlock,
@@ -55,16 +65,18 @@ func floatFields(r rune) bool {
 	return !unicode.IsDigit(r) && (r != '.')
 }
 
-func foundTopBlock(rs *bufio.Scanner) bool {
-	return strings.HasPrefix(rs.Text(), topBlock_Header)
-}
-
 func parseFloat(s string) float64 {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		f = 0.0
 	}
 	return f
+}
+
+// Top First Line (CPU) Parsing
+
+func foundTopBlock(rs *bufio.Scanner) bool {
+	return strings.HasPrefix(rs.Text(), topBlock_Header)
 }
 
 func parseTopBlock(s *stat.Stat, rs *bufio.Scanner) error {
@@ -81,6 +93,34 @@ func parseTopBlock(s *stat.Stat, rs *bufio.Scanner) error {
 
 	return nil
 }
+
+// CPU Line (WaitState) Parsing
+
+func foundCPUBlock(rs *bufio.Scanner) bool {
+	return strings.HasPrefix(rs.Text(), cpuBlock_Header)
+}
+
+func parseCPUBlock(s *stat.Stat, rs *bufio.Scanner) error {
+	fields := strings.Fields(rs.Text())
+	s.AddFloat("WaitState", parseFloat(fields[cpuBlock_Wait]))
+
+	if !rs.Scan() {
+		return rs.Err()
+	}
+	fields = strings.Fields(rs.Text())
+	s.AddFloat("FreeMem", parseFloat(fields[cpuBlock_Free])/1024)
+	s.AddFloat("UsedMem", parseFloat(fields[cpuBlock_Used])/1024)
+
+	if !rs.Scan() {
+		return rs.Err()
+	}
+	fields = strings.Fields(rs.Text())
+	s.AddFloat("SwapMem", parseFloat(fields[cpuBlock_Swap])/1024)
+
+	return nil
+}
+
+// Process (PID) Parsing
 
 func foundProcessBlock(rs *bufio.Scanner) bool {
 	return strings.HasPrefix(rs.Text(), processBlock_Header)
@@ -101,5 +141,5 @@ func parseProcessBlock(s *stat.Stat, rs *bufio.Scanner) error {
 		s.AddFloat("mysql %MEM", parseFloat(fields[processBlock_pctMem]))
 		break
 	}
-	return nil
+	return rs.Err()
 }

@@ -10,17 +10,17 @@ import (
 )
 
 type SinglePlot struct {
-	Title string
-	Stat  []stat.Stat
-	Lines []lineInfo
+	title string
+	stats []stat.Stat
+	lines []lineInfo
 }
 
 func NewSinglePlot(title string, s []stat.Stat) *SinglePlot {
-	return &SinglePlot{Title: title, Stat: s}
+	return &SinglePlot{title: title, stats: s}
 }
 
 func (sp *SinglePlot) AddLine(valueSet string, c color.RGBA) {
-	sp.Lines = append(sp.Lines, lineInfo{valueSet: valueSet, color: c})
+	sp.lines = append(sp.lines, lineInfo{valueSet: valueSet, color: c})
 }
 
 type lineInfo struct {
@@ -43,16 +43,16 @@ func (sp *SinglePlot) Save(imgfile string) error {
 func (sp *SinglePlot) plotLines() (p *plot.Plot, err error) {
 	p, err = plot.New()
 	if err != nil {
-		return nil, fmt.Errorf("could not create plot: %v", err)
+		return nil, fmt.Errorf("could not create plot '%s': %v", sp.title, err)
 	}
 
-	p.Title.Text = sp.Title
+	p.Title.Text = sp.title
 	p.X.Tick.Marker = plot.TimeTicks{Format: "2006-01-02\n15:04"}
 	p.X.Label.Text = "Time"
 	p.Y.Label.Text = "Values"
 
-	for _, line := range sp.Lines {
-		_, err = newLine(p, sp.Stat, line.valueSet, line.color)
+	for _, line := range sp.lines {
+		_, err = newLine(p, sp.stats, line.valueSet, line.color)
 		if err != nil {
 			return nil, fmt.Errorf("could not create line '%s': %v", line.valueSet, err)
 		}
@@ -70,23 +70,4 @@ func newLine(p *plot.Plot, stats []stat.Stat, value string, c color.Color) (l *p
 	p.Add(l)
 	p.Legend.Add(value, l)
 	return
-}
-
-type statXY struct {
-	value string
-	stats []stat.Stat
-}
-
-func (s statXY) Len() int {
-	return len(s.stats)
-}
-
-func (s statXY) XY(i int) (x float64, y float64) {
-	si := s.stats[i]
-	v := si.FloatValues[s.value]
-	return float64(si.Time.Unix()), v
-}
-
-func newStatXY(s []stat.Stat, value string) *statXY {
-	return &statXY{value: value, stats: s}
 }

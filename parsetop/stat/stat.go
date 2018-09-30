@@ -66,11 +66,56 @@ func FillStatVector(wg *sync.WaitGroup, cIn <-chan Stat, w *[]Stat) {
 	wg.Done()
 }
 
-//TODO
+type agrStat struct {
+	Stat
+	nbFloat map[string]int
+	nbInt   map[string]int
+}
 
 func FillAggregatedStatVector(wg *sync.WaitGroup, cIn <-chan Stat, w *[]Stat, tick time.Duration) {
-	for s := range cIn {
-		*w = append(*w, s)
+	current := agrStat{Stat: Stat{}, nbFloat: map[string]int{}, nbInt: map[string]int{}}
+
+	appendCurrent := func() {
+		ns := NewStat(current.Time)
+		for k, v := range current.FloatValues {
+			ns.FloatValues[k] = v / float64(current.nbFloat[k])
+		}
+		for k, v := range current.Int64Values {
+			ns.Int64Values[k] = v / int64(current.nbInt[k])
+		}
+		*w = append(*w, ns)
 	}
+
+	for s := range cIn {
+		rtime := s.Time.Round(tick)
+		if !current.Time.Equal(rtime) {
+			// It's a new slot
+			// first, append current one if exist
+			if current.FloatValues != nil {
+				appendCurrent()
+			}
+			// then create new agrStat from new Stat
+			current = agrStat{Stat: s, nbFloat: map[string]int{}, nbInt: map[string]int{}}
+			current.Time = rtime
+			for k, _ := range s.FloatValues {
+				current.nbFloat[k] = 1
+			}
+			for k, _ := range s.Int64Values {
+				current.nbInt[k] = 1
+			}
+		} else {
+			// still the same slot, do add new values to previous ones
+			for k, v := range s.FloatValues {
+				current.FloatValues[k] += v
+				current.nbFloat[k] += 1
+			}
+			for k, v := range s.Int64Values {
+				current.Int64Values[k] += v
+				current.nbInt[k] += 1
+			}
+		}
+	}
+	// last Stat is processed, so append the remaining
+	appendCurrent()
 	wg.Done()
 }

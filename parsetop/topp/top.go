@@ -96,7 +96,7 @@ func parseProcessBlock(s *Stat, rs *bufio.Scanner) error {
 		fields := strings.Fields(rs.Text())
 		s.AddFloat("mysql Virtual", parseFloat(fields[processBlock_Virtual])/1024)
 		s.AddFloat("mysql RAM", parseFloat(fields[processBlock_Memory])/1024)
-		s.AddFloat("mysql %CPU", parseFloat(fields[processBlock_pctCPU]))
+		s.AddFloat("mysql %CPU", parseFloat(fields[processBlock_pctCPU])/100)
 		s.AddFloat("mysql %MEM", parseFloat(fields[processBlock_pctMem]))
 		break
 	}

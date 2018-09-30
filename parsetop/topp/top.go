@@ -2,6 +2,7 @@ package topp
 
 import (
 	"bufio"
+	"github.com/lpuig/scopelecspi/parsetop/stat"
 	"strconv"
 	"strings"
 	"time"
@@ -66,11 +67,11 @@ func parseFloat(s string) float64 {
 	return f
 }
 
-func parseTopBlock(s *Stat, rs *bufio.Scanner) error {
+func parseTopBlock(s *stat.Stat, rs *bufio.Scanner) error {
 	fields := strings.Fields(rs.Text()[:20])
 
 	t, _ := time.Parse(topLine_timeFormat, fields[topLine_TimePos])
-	*s = NewStat(currentDay.Add(t.Sub(time.Time{})).AddDate(1, 0, 1))
+	*s = stat.NewStat(currentDay.Add(t.Sub(time.Time{})).AddDate(1, 0, 1))
 	//s := NewStat(currentDay.Add(t.Sub(time.Time{})))
 
 	fields = strings.FieldsFunc(skip(rs.Text(), topLine_LoadMarker), floatFields)
@@ -85,7 +86,7 @@ func foundProcessBlock(rs *bufio.Scanner) bool {
 	return strings.HasPrefix(rs.Text(), processBlock_Header)
 }
 
-func parseProcessBlock(s *Stat, rs *bufio.Scanner) error {
+func parseProcessBlock(s *stat.Stat, rs *bufio.Scanner) error {
 	for rs.Scan() {
 		if rs.Text() == "" {
 			return nil

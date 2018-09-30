@@ -2,6 +2,7 @@ package topp
 
 import (
 	"bufio"
+	"github.com/lpuig/scopelecspi/parsetop/stat"
 	"io"
 	"time"
 )
@@ -17,7 +18,7 @@ func SetStartDay(day string) error {
 	return nil
 }
 
-func Parse(r io.Reader, b *ParserDef, cOut chan<- Stat) error {
+func Parse(r io.Reader, b *ParserDef, cOut chan<- stat.Stat) error {
 	rs := bufio.NewScanner(r)
 	defer close(cOut)
 	prevTime := currentDay

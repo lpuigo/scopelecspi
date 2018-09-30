@@ -1,4 +1,4 @@
-package topp
+package stat
 
 import (
 	"fmt"
@@ -60,6 +60,15 @@ func WriteToCSV(wg *sync.WaitGroup, cIn <-chan Stat, w io.Writer) {
 }
 
 func FillStatVector(wg *sync.WaitGroup, cIn <-chan Stat, w *[]Stat) {
+	for s := range cIn {
+		*w = append(*w, s)
+	}
+	wg.Done()
+}
+
+//TODO
+
+func FillAggregatedStatVector(wg *sync.WaitGroup, cIn <-chan Stat, w *[]Stat, tick time.Duration) {
 	for s := range cIn {
 		*w = append(*w, s)
 	}

@@ -2,6 +2,7 @@ package topp
 
 import (
 	"bufio"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -26,8 +27,8 @@ const (
 	processBlock_pctMem  int    = 9
 )
 
-func NewTopBlock() *Block {
-	return &Block{
+func NewTopParserDef() *ParserDef {
+	return &ParserDef{
 		Chapters: []chapter{
 			chapter{
 				Found: foundTopBlock,
@@ -57,6 +58,14 @@ func foundTopBlock(rs *bufio.Scanner) bool {
 	return strings.HasPrefix(rs.Text(), topBlock_Header)
 }
 
+func parseFloat(s string) float64 {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		f = 0.0
+	}
+	return f
+}
+
 func parseTopBlock(s *Stat, rs *bufio.Scanner) error {
 	fields := strings.Fields(rs.Text()[:20])
 
@@ -65,9 +74,9 @@ func parseTopBlock(s *Stat, rs *bufio.Scanner) error {
 	//s := NewStat(currentDay.Add(t.Sub(time.Time{})))
 
 	fields = strings.FieldsFunc(skip(rs.Text(), topLine_LoadMarker), floatFields)
-	s.Add("Load 1min", fields[topLine_Load1Pos])
-	s.Add("Load 5min", fields[topLine_Load5Pos])
-	s.Add("Load15min", fields[topLine_Load15Pos])
+	s.AddFloat("Load 1min", parseFloat(fields[topLine_Load1Pos]))
+	s.AddFloat("Load 5min", parseFloat(fields[topLine_Load5Pos]))
+	s.AddFloat("Load15min", parseFloat(fields[topLine_Load15Pos]))
 
 	return nil
 }
@@ -85,10 +94,10 @@ func parseProcessBlock(s *Stat, rs *bufio.Scanner) error {
 			continue
 		}
 		fields := strings.Fields(rs.Text())
-		s.Add("mysql Virtual", fields[processBlock_Virtual])
-		s.Add("mysql RAM", fields[processBlock_Memory])
-		s.Add("mysql %CPU", fields[processBlock_pctCPU])
-		s.Add("mysql %MEM", fields[processBlock_pctMem])
+		s.AddFloat("mysql Virtual", parseFloat(fields[processBlock_Virtual])/1024)
+		s.AddFloat("mysql RAM", parseFloat(fields[processBlock_Memory])/1024)
+		s.AddFloat("mysql %CPU", parseFloat(fields[processBlock_pctCPU]))
+		s.AddFloat("mysql %MEM", parseFloat(fields[processBlock_pctMem]))
 		break
 	}
 	return nil

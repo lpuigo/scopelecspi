@@ -7,17 +7,17 @@ type chapter struct {
 	Parse func(s *Stat, rs *bufio.Scanner) error
 }
 
-type Block struct {
+type ParserDef struct {
 	Chapters       []chapter
 	CurrentChapter int
 	Stat           Stat
 }
 
-func (b *Block) Found(rs *bufio.Scanner) bool {
+func (b *ParserDef) Found(rs *bufio.Scanner) bool {
 	return b.Chapters[0].Found(rs)
 }
 
-func (b *Block) Parse(rs *bufio.Scanner) (Stat, error) {
+func (b *ParserDef) Parse(rs *bufio.Scanner) (Stat, error) {
 	b.CurrentChapter = 0
 	for {
 		err := b.Chapters[b.CurrentChapter].Parse(&b.Stat, rs)

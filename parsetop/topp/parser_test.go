@@ -1,7 +1,6 @@
 package topp
 
 import (
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -29,7 +28,6 @@ func TestParse(t *testing.T) {
 	c := make(chan Stat)
 	writer := sync.WaitGroup{}
 	writer.Add(1)
-	fmt.Println("Starting Writer")
 	go WriteToCSV(&writer, c, of)
 
 	err = SetStartDay("2018-09-27")
@@ -37,9 +35,9 @@ func TestParse(t *testing.T) {
 		t.Fatal("SetStartDay returns:", err)
 	}
 
-	blockdesc := NewTopBlock()
+	topDef := NewTopParserDef()
 
-	err = Parse(f, blockdesc, c)
+	err = Parse(f, topDef, c)
 	if err != nil {
 		t.Fatal("Parse returns:", err)
 	}

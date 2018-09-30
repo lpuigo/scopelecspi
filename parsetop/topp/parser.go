@@ -17,7 +17,7 @@ func SetStartDay(day string) error {
 	return nil
 }
 
-func Parse(r io.Reader, b *Block, cOut chan<- Stat) error {
+func Parse(r io.Reader, b *ParserDef, cOut chan<- Stat) error {
 	rs := bufio.NewScanner(r)
 	defer close(cOut)
 	prevTime := currentDay

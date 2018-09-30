@@ -58,3 +58,10 @@ func WriteToCSV(wg *sync.WaitGroup, cIn <-chan Stat, w io.Writer) {
 	}
 	wg.Done()
 }
+
+func FillStatVector(wg *sync.WaitGroup, cIn <-chan Stat, w *[]Stat) {
+	for s := range cIn {
+		*w = append(*w, s)
+	}
+	wg.Done()
+}

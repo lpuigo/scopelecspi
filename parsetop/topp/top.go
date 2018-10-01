@@ -66,9 +66,23 @@ func floatFields(r rune) bool {
 }
 
 func parseFloat(s string) float64 {
+	var mult float64
+	switch s[len(s)-1] {
+	case 'g':
+		s = s[:len(s)-1]
+		mult = 1024 * 1024
+	case 'm':
+		s = s[:len(s)-1]
+		mult = 1024
+	default:
+
+	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		f = 0.0
+	}
+	if mult != 0 {
+		f *= mult
 	}
 	return f
 }
@@ -102,7 +116,7 @@ func foundCPUBlock(rs *bufio.Scanner) bool {
 
 func parseCPUBlock(s *stat.Stat, rs *bufio.Scanner) error {
 	fields := strings.Fields(rs.Text())
-	s.AddFloat("WaitState", parseFloat(fields[cpuBlock_Wait]))
+	s.AddFloat("WaitState", parseFloat(fields[cpuBlock_Wait])/100)
 
 	if !rs.Scan() {
 		return rs.Err()

@@ -68,6 +68,9 @@ func floatFields(r rune) bool {
 func parseFloat(s string) float64 {
 	var mult float64
 	switch s[len(s)-1] {
+	case 't':
+		s = s[:len(s)-1]
+		mult = 1024 * 1024 * 1024
 	case 'g':
 		s = s[:len(s)-1]
 		mult = 1024 * 1024

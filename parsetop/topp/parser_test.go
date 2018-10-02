@@ -5,26 +5,32 @@ import (
 	"github.com/lpuig/scopelecspi/parsetop/stat"
 	"image/color"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
 const (
-	testFile    string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\2018-10-01.txt`
-	testFile2   string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\2018-09-27.txt`
+	testFile    string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\2018-10-01.prod.txt`
+	testFile2   string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\2018-09-27.prod.txt`
 	testResFile string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\out.txt`
-	testImgFile string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\out.png`
 )
 
 func TestParse(t *testing.T) {
-	f, err := os.Open(testFile)
+	statfile := testFile
+	f, err := os.Open(statfile)
 	if err != nil {
 		t.Fatal("could not open test file:", err)
 	}
 	defer f.Close()
 
-	of, err := os.Create(testResFile)
+	basefile := filepath.Base(statfile)
+	basefile = strings.Replace(basefile, filepath.Ext(basefile), "", -1)
+
+	resfile := filepath.Join(filepath.Dir(statfile), basefile+".csv")
+	of, err := os.Create(resfile)
 	if err != nil {
 		t.Fatal("could not create result file:", err)
 	}
@@ -35,7 +41,7 @@ func TestParse(t *testing.T) {
 	writer.Add(1)
 	go stat.WriteToCSV(&writer, c, of)
 
-	err = SetStartDay("2018-09-27")
+	err = SetStartDay(strings.Split(basefile, ".")[0])
 	if err != nil {
 		t.Fatal("SetStartDay returns:", err)
 	}
@@ -51,7 +57,12 @@ func TestParse(t *testing.T) {
 }
 
 func TestPlot(t *testing.T) {
-	f, err := os.Open(testFile)
+	statfile := testFile
+	basefile := filepath.Base(statfile)
+	basefile = strings.Replace(basefile, filepath.Ext(basefile), "", -1)
+	resfile := filepath.Join(filepath.Dir(statfile), basefile+".png")
+
+	f, err := os.Open(statfile)
 	if err != nil {
 		t.Fatal("could not open test file:", err)
 	}
@@ -62,9 +73,9 @@ func TestPlot(t *testing.T) {
 	vector.Add(1)
 	Stats := make([]stat.Stat, 0, 1000)
 	//go stat.FillStatVector(&vector, c, &Stats)
-	go stat.FillAggregatedStatVector(&vector, c, &Stats, 30*time.Second)
+	go stat.FillAggregatedStatVector(&vector, c, &Stats, 180*time.Second)
 
-	err = SetStartDay("2018-09-27")
+	err = SetStartDay(strings.Split(basefile, ".")[0])
 	if err != nil {
 		t.Fatal("SetStartDay returns:", err)
 	}
@@ -96,7 +107,7 @@ func TestPlot(t *testing.T) {
 		t.Fatal("Multiplot AlignVertical returns:", err)
 	}
 
-	err = mplot.Save(testImgFile)
+	err = mplot.Save(resfile)
 	if err != nil {
 		t.Fatalf("Save returns:%v", err)
 	}

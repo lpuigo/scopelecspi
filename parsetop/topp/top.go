@@ -27,11 +27,12 @@ const (
 	cpuBlock_Free   int    = 6
 	cpuBlock_Swap   int    = 4
 
-	processBlock_Header  string = "  PID "
-	processBlock_Virtual int    = 4
-	processBlock_Memory  int    = 5
-	processBlock_pctCPU  int    = 8
-	processBlock_pctMem  int    = 9
+	processBlock_Header   string = "  PID "
+	processBlock_Virtual  int    = 4
+	processBlock_Memory   int    = 5
+	processBlock_pctCPU   int    = 8
+	processBlock_pctMem   int    = 9
+	processBlock_progName int    = 11
 )
 
 func NewTopParserDef() *ParserDef {
@@ -144,19 +145,29 @@ func foundProcessBlock(rs *bufio.Scanner) bool {
 }
 
 func parseProcessBlock(s *stat.Stat, rs *bufio.Scanner) error {
+	var fields []string
 	for rs.Scan() {
 		if rs.Text() == "" {
 			return nil
 		}
-		if !strings.Contains(rs.Text()[:17], " mysql ") {
-			continue
+		prog := ""
+		fields = strings.Fields(rs.Text())
+		if strings.Contains(rs.Text()[:17], " mysql ") {
+			prog = "MySQL"
+		} else {
+			switch fields[processBlock_progName] {
+			case "Passenger", "sidekiq":
+				prog = "Ruby"
+			case "/usr/local/rvm/rubies/ruby-2.3.0/bin/ruby":
+				prog = "Rails"
+			default:
+				continue
+			}
 		}
-		fields := strings.Fields(rs.Text())
-		s.AddFloat("mysql Virtual", parseFloat(fields[processBlock_Virtual])/1024)
-		s.AddFloat("mysql RAM", parseFloat(fields[processBlock_Memory])/1024)
-		s.AddFloat("mysql %CPU", parseFloat(fields[processBlock_pctCPU])/100)
-		s.AddFloat("mysql %MEM", parseFloat(fields[processBlock_pctMem]))
-		break
+		s.SumFloat(prog+" Virtual", parseFloat(fields[processBlock_Virtual])/1024)
+		s.SumFloat(prog+" RAM", parseFloat(fields[processBlock_Memory])/1024)
+		s.SumFloat(prog+" %CPU", parseFloat(fields[processBlock_pctCPU])/100)
+		s.SumFloat(prog+" %MEM", parseFloat(fields[processBlock_pctMem]))
 	}
 	return rs.Err()
 }

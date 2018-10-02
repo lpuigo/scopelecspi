@@ -39,6 +39,10 @@ func (s *Stat) AddFloat(key string, val float64) {
 	s.FloatValues[key] = val
 }
 
+func (s *Stat) SumFloat(key string, val float64) {
+	s.FloatValues[key] += val
+}
+
 func (s *Stat) AddInt(key string, val int64) {
 	s.Int64Values[key] = val
 }

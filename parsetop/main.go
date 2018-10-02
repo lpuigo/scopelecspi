@@ -1,70 +1,39 @@
-package topp
+package main
 
 import (
+	"fmt"
 	"github.com/lpuig/scopelecspi/parsetop/gfx"
 	"github.com/lpuig/scopelecspi/parsetop/stat"
+	"github.com/lpuig/scopelecspi/parsetop/topp"
 	"image/color"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"testing"
 	"time"
 )
 
-const (
-	testFile    string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\2018-10-01.prod.txt`
-	testFile2   string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\2018-09-27.prod.txt`
-	testResFile string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsetop\test\out.txt`
-)
-
-func TestParse(t *testing.T) {
-	statfile := testFile
-	f, err := os.Open(statfile)
-	if err != nil {
-		t.Fatal("could not open test file:", err)
-	}
-	defer f.Close()
-
-	basefile := filepath.Base(statfile)
-	basefile = strings.Replace(basefile, filepath.Ext(basefile), "", -1)
-
-	resfile := filepath.Join(filepath.Dir(statfile), basefile+".csv")
-	of, err := os.Create(resfile)
-	if err != nil {
-		t.Fatal("could not create result file:", err)
-	}
-	defer of.Close()
-
-	c := make(chan stat.Stat)
-	writer := sync.WaitGroup{}
-	writer.Add(1)
-	go stat.WriteToCSV(&writer, c, of)
-
-	err = SetStartDay(strings.Split(basefile, ".")[0])
-	if err != nil {
-		t.Fatal("SetStartDay returns:", err)
+func main() {
+	args := os.Args
+	if len(args) < 2 {
+		log.Fatal("Usage : parseTop AAAA-MM-JJ.env.txt\n Will produce a png file named AAAA-MM-JJ.env.png showing Top Stats")
 	}
 
-	topDef := NewTopParserDef()
-
-	err = Parse(f, topDef, c)
-	if err != nil {
-		t.Fatal("Parse returns:", err)
+	file := args[1]
+	if err := GenTopImg(file); err != nil {
+		log.Fatal(err)
 	}
-
-	writer.Wait()
 }
 
-func TestPlot(t *testing.T) {
-	statfile := testFile
+func GenTopImg(statfile string) error {
 	basefile := filepath.Base(statfile)
 	basefile = strings.Replace(basefile, filepath.Ext(basefile), "", -1)
 	resfile := filepath.Join(filepath.Dir(statfile), basefile+".png")
 
 	f, err := os.Open(statfile)
 	if err != nil {
-		t.Fatal("could not open test file:", err)
+		return fmt.Errorf("could not open file: %v", err)
 	}
 	defer f.Close()
 
@@ -75,16 +44,16 @@ func TestPlot(t *testing.T) {
 	//go stat.FillStatVector(&vector, c, &Stats)
 	go stat.FillAggregatedStatVector(&vector, c, &Stats, 300*time.Second)
 
-	err = SetStartDay(strings.Split(basefile, ".")[0])
+	err = topp.SetStartDay(strings.Split(basefile, ".")[0])
 	if err != nil {
-		t.Fatal("SetStartDay returns:", err)
+		return fmt.Errorf("could not detect date from filename: %v", err)
 	}
 
-	topDef := NewTopParserDef()
+	topDef := topp.NewTopParserDef()
 
-	err = Parse(f, topDef, c)
+	err = topp.Parse(f, topDef, c)
 	if err != nil {
-		t.Fatal("Parse returns:", err)
+		return fmt.Errorf("could not parse file: %v", err)
 	}
 
 	vector.Wait()
@@ -108,11 +77,12 @@ func TestPlot(t *testing.T) {
 	mplot := gfx.NewMultiPlot(splot1, splot2, splot3)
 	err = mplot.AlignVertical()
 	if err != nil {
-		t.Fatal("Multiplot AlignVertical returns:", err)
+		return fmt.Errorf("could not create multiplot: %v", err)
 	}
 
 	err = mplot.Save(resfile)
 	if err != nil {
-		t.Fatalf("Save returns:%v", err)
+		return fmt.Errorf("could not save result PNG file: %v", err)
 	}
+	return nil
 }

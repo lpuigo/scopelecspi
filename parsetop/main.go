@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/lpuig/scopelecspi/parsetop/gfx"
 	"github.com/lpuig/scopelecspi/parsetop/stat"
@@ -14,26 +15,48 @@ import (
 	"time"
 )
 
+const (
+	optInterval int = 5
+)
+
+type Options struct {
+	Interval int
+}
+
 func main() {
-	args := os.Args
-	if len(args) < 2 {
-		log.Fatal("Usage : parseTop AAAA-MM-JJ.env.txt\n Will produce a png file named AAAA-MM-JJ.env.png showing Top Stats")
+	opts := Options{
+		Interval: optInterval,
 	}
 
-	file := args[1]
-	if err := GenTopImg(file); err != nil {
-		log.Fatal(err)
+	flag.IntVar(&opts.Interval, "i", optInterval, "Stat interval (n minutes)")
+	flag.Parse()
+
+	if len(flag.Args()) == 0 {
+		log.Fatal("Usage : %s AAAA-MM-JJ.env.txt\n Will produce a png file named AAAA-MM-JJ.env.png showing Top Stats", os.Args[0])
+	}
+
+	for _, file := range flag.Args() {
+		fmt.Printf("Parsing %s ... ", file)
+		t := time.Now()
+		_, err := opts.GenTopImg(file)
+		if err != nil {
+			log.Println(err)
+		} else {
+			fmt.Printf("done (took %v)\n", time.Since(t))
+		}
+
 	}
 }
 
-func GenTopImg(statfile string) error {
+func (opt *Options) GenTopImg(statfile string) (resfile string, err error) {
 	basefile := filepath.Base(statfile)
 	basefile = strings.Replace(basefile, filepath.Ext(basefile), "", -1)
-	resfile := filepath.Join(filepath.Dir(statfile), basefile+".png")
+	resfile = filepath.Join(filepath.Dir(statfile), basefile+".png")
 
 	f, err := os.Open(statfile)
 	if err != nil {
-		return fmt.Errorf("could not open file: %v", err)
+		err = fmt.Errorf("could not open file: %v", err)
+		return
 	}
 	defer f.Close()
 
@@ -42,18 +65,20 @@ func GenTopImg(statfile string) error {
 	vector.Add(1)
 	Stats := make([]stat.Stat, 0, 1000)
 	//go stat.FillStatVector(&vector, c, &Stats)
-	go stat.FillAggregatedStatVector(&vector, c, &Stats, 300*time.Second)
+	go stat.FillAggregatedStatVector(&vector, c, &Stats, time.Duration(opt.Interval)*time.Minute)
 
 	err = topp.SetStartDay(strings.Split(basefile, ".")[0])
 	if err != nil {
-		return fmt.Errorf("could not detect date from filename: %v", err)
+		err = fmt.Errorf("could not detect date from filename: %v", err)
+		return
 	}
 
 	topDef := topp.NewTopParserDef()
 
 	err = topp.Parse(f, topDef, c)
 	if err != nil {
-		return fmt.Errorf("could not parse file: %v", err)
+		err = fmt.Errorf("could not parse file: %v", err)
+		return
 	}
 
 	vector.Wait()
@@ -77,12 +102,14 @@ func GenTopImg(statfile string) error {
 	mplot := gfx.NewMultiPlot(splot1, splot2, splot3)
 	err = mplot.AlignVertical()
 	if err != nil {
-		return fmt.Errorf("could not create multiplot: %v", err)
+		err = fmt.Errorf("could not create multiplot: %v", err)
+		return
 	}
 
 	err = mplot.Save(resfile)
 	if err != nil {
-		return fmt.Errorf("could not save result PNG file: %v", err)
+		err = fmt.Errorf("could not save result PNG file: %v", err)
+		return
 	}
-	return nil
+	return
 }

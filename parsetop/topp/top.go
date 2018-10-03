@@ -81,7 +81,7 @@ func parseFloat(s string) float64 {
 	default:
 
 	}
-	f, err := strconv.ParseFloat(s, 64)
+	f, err := strconv.ParseFloat(strings.Replace(s, ",", ".", 1), 64)
 	if err != nil {
 		f = 0.0
 	}
@@ -126,15 +126,25 @@ func parseCPUBlock(s *stat.Stat, rs *bufio.Scanner) error {
 		return rs.Err()
 	}
 	fields = strings.Fields(rs.Text())
-	s.AddFloat("FreeMem", parseFloat(fields[cpuBlock_Free])/1024)
-	s.AddFloat("UsedMem", parseFloat(fields[cpuBlock_Used])/1024)
+	switch rs.Text()[0:9] {
+	case "KiB Mem :":
+		s.AddFloat("FreeMem", parseFloat(fields[cpuBlock_Used+1])/1024)
+		s.AddFloat("UsedMem", parseFloat(fields[cpuBlock_Free+1])/1024)
+	case "KiB Mem: ":
+		s.AddFloat("FreeMem", parseFloat(fields[cpuBlock_Free])/1024)
+		s.AddFloat("UsedMem", parseFloat(fields[cpuBlock_Used])/1024)
+	}
 
 	if !rs.Scan() {
 		return rs.Err()
 	}
 	fields = strings.Fields(rs.Text())
-	s.AddFloat("SwapMem", parseFloat(fields[cpuBlock_Swap])/1024)
-
+	switch fields[cpuBlock_Swap+1][:4] {
+	case "used":
+		s.AddFloat("SwapMem", parseFloat(fields[cpuBlock_Swap])/1024)
+	case "free":
+		s.AddFloat("SwapMem", parseFloat(fields[cpuBlock_Swap+2])/1024)
+	}
 	return nil
 }
 

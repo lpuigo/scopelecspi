@@ -2,18 +2,15 @@ package main
 
 import (
 	"bufio"
-	csv2 "encoding/csv"
+	"encoding/csv"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-)
-
-const (
-	file    string = `C:\Users\Laurent\Google Drive\Travail\SCOPELEC\SPI\Perf Talea\Backup\talea-slow.log`
-	outfile string = `./slow.csv`
 )
 
 type SlowInfo struct {
@@ -39,19 +36,24 @@ func (si *SlowInfo) Serialize() (row []string) {
 }
 
 func main() {
+	flag.Parse()
+	file := flag.Arg(0)
 	f, err := os.Open(file)
 	if err != nil {
 		log.Fatal("could not open file:", err)
 	}
 	defer f.Close()
 
+	outfile := filepath.Join(filepath.Dir(file), strings.Replace(filepath.Base(file), filepath.Ext(file), ".csv", -1))
 	of, err := os.Create(outfile)
 	if err != nil {
 		log.Fatal("could not create file:", err)
 	}
 	defer of.Close()
+	fmt.Printf("writing result to '%s' ...", outfile)
+	t := time.Now()
 
-	w := csv2.NewWriter(of)
+	w := csv.NewWriter(of)
 	w.Comma = ';'
 
 	w.Write([]string{
@@ -74,6 +76,8 @@ func main() {
 	}
 	if err := rs.Err(); err != nil {
 		log.Fatal("error while parsing:", err)
+	} else {
+		fmt.Printf(" Done (took %s)\n", time.Since(t))
 	}
 }
 

@@ -20,5 +20,6 @@ config.json
 # default config file
 linux/
 
-# test txt files
+# test txt & log files
 *.txt
+*.log

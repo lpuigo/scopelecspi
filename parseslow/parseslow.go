@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -24,15 +25,50 @@ type SlowInfo struct {
 }
 
 func (si *SlowInfo) Serialize() (row []string) {
+	reqtype, info := si.Info()
 	return []string{
 		si.Time.Format("2006-01-02 15:04:05"),
 		si.User,
-		fmt.Sprintf("%5f", si.Duration),
-		fmt.Sprintf("%5f", si.LockDuration),
+		strings.Replace(fmt.Sprintf("%5f", si.Duration), ".", ",", 1),
+		strings.Replace(fmt.Sprintf("%5f", si.LockDuration), ".", ",", 1),
 		fmt.Sprintf("%d", si.RowsSent),
 		fmt.Sprintf("%d", si.RowsExamined),
+		reqtype, info,
 		si.Query,
 	}
+}
+
+func (si *SlowInfo) Info() (reqtype, info string) {
+	if strings.Contains(si.User, "BiCube[BiCube]") {
+		// return the base.table info
+		return "Qlick", infoReps[0].reg.FindStringSubmatch(si.Query)[1]
+	}
+	if strings.Contains(si.Query, "SELECT /*!40001 SQL_NO_CACHE") {
+		// return the base.table info
+		return "Backup", infoReps[0].reg.FindStringSubmatch(si.Query)[1]
+	}
+	if len(si.Query) > 14000 {
+		// return the concerned IMB
+		infos := infoReps[1].reg.FindStringSubmatch(si.Query)
+		imb := ""
+		if len(infos) >= 2 {
+			imb = infos[1]
+		}
+		return "Mystere", imb
+	}
+	return "", ""
+}
+
+type Replace struct {
+	reg *regexp.Regexp
+	by  string
+}
+
+var infoReps []Replace
+
+func init() {
+	infoReps = append(infoReps, Replace{reg: regexp.MustCompile("FROM (.+);")})
+	infoReps = append(infoReps, Replace{reg: regexp.MustCompile("syndics.code_syn like '(.+?)'")})
 }
 
 func main() {
@@ -57,7 +93,7 @@ func main() {
 	w.Comma = ';'
 
 	w.Write([]string{
-		"Time", "User", "Duration", "LockDuration", "Rows_Sent", "Rows_Examined", "Query",
+		"Time", "User", "Duration", "LockDuration", "Rows_Sent", "Rows_Examined", "ReqType", "Info", "Query",
 	})
 
 	rs := bufio.NewScanner(f)

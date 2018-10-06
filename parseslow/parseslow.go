@@ -39,7 +39,7 @@ func (si *SlowInfo) Serialize() (row []string) {
 }
 
 func (si *SlowInfo) Info() (reqtype, info string) {
-	if strings.Contains(si.User, "BiCube[BiCube]") {
+	if strings.Contains(si.User, "BiCube[BiCube]") || strings.Contains(si.User, "talea[talea] @  [10.245.") {
 		// return the base.table info
 		return "Qlick", infoReps[0].reg.FindStringSubmatch(si.Query)[1]
 	}
@@ -136,8 +136,10 @@ func parseSlowInfo(rs *bufio.Scanner) (si SlowInfo, skipparse bool, err error) {
 	if !rs.Scan() {
 		return SlowInfo{}, false, fmt.Errorf("could not scan: %v", rs.Err())
 	}
-	line = rs.Text()
-	fields := strings.Fields(strings.Replace(line, "# Query_time: ", "", 1))
+	if strings.HasPrefix(rs.Text(), "# Thread_id") && !rs.Scan() { // consume "Thread" Line
+		return SlowInfo{}, false, fmt.Errorf("could not scan: %v", rs.Err())
+	}
+	fields := strings.Fields(strings.Replace(rs.Text(), "# Query_time: ", "", 1))
 	si.Duration, err = strconv.ParseFloat(fields[0], 64)
 	if err != nil {
 		return SlowInfo{}, false, fmt.Errorf("could not parse Query_time '%s': %v", fields[0], err)

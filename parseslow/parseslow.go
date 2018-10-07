@@ -1,10 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"github.com/lpuig/scopelecspi/parseslow/parser"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,6 +22,58 @@ type SlowInfo struct {
 	RowsSent     int64
 	RowsExamined int64
 	Query        string
+}
+
+func (si *SlowInfo) FirstLineFound(line string) bool {
+	return strings.HasPrefix(line, "# Time:")
+}
+
+func (si *SlowInfo) Parse(p *parser.Parser) (keepGoing, keepCurrentLine bool, err error) {
+	line := p.Text()
+	si.Time, err = time.Parse("060102 15:04:05", strings.Replace(line, "# Time: ", "", 1))
+	if err != nil {
+		return false, false, fmt.Errorf("could not parse time '%s'", line)
+	}
+
+	//User Line
+	if !p.Scan() {
+		return false, false, p.Err()
+	}
+	si.User = strings.Replace(p.Text(), "# User@Host: ", "", 1)
+
+	// Query info Line
+	if !p.Scan() {
+		return false, false, p.Err()
+	}
+	if strings.HasPrefix(p.Text(), "# Thread_id") && !p.Scan() { // consume "Thread" Line
+		return false, false, p.Err()
+	}
+	fields := strings.Fields(strings.Replace(p.Text(), "# Query_time: ", "", 1))
+	si.Duration, err = strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return true, false, fmt.Errorf("could not parse Query_time: %v", err)
+	}
+	si.LockDuration, err = strconv.ParseFloat(fields[2], 64)
+	if err != nil {
+		return true, false, fmt.Errorf("could not parse Lock_time: %v", err)
+	}
+	si.RowsSent, err = strconv.ParseInt(fields[4], 10, 64)
+	if err != nil {
+		return true, false, fmt.Errorf("could not parse Rows_sent: %v", err)
+	}
+	si.RowsExamined, err = strconv.ParseInt(fields[6], 10, 64)
+	if err != nil {
+		return true, false, fmt.Errorf("could not parse Rows_examined: %v", err)
+	}
+
+	// Query detail Lines
+	for p.Scan() {
+		if si.FirstLineFound(p.Text()) {
+			return true, true, nil
+		}
+		si.Query += p.Text() + "\n"
+	}
+	return false, false, p.Err()
 }
 
 func (si *SlowInfo) Serialize() (row []string) {
@@ -90,80 +142,26 @@ func main() {
 	t := time.Now()
 
 	w := csv.NewWriter(of)
+	defer w.Flush()
 	w.Comma = ';'
 
 	w.Write([]string{
 		"Time", "User", "Duration", "LockDuration", "Rows_Sent", "Rows_Examined", "ReqType", "Info", "Query",
 	})
 
-	rs := bufio.NewScanner(f)
-	skipscan := false
+	p := parser.New(f)
 	var si SlowInfo
-	for skipscan || rs.Scan() {
-		if !strings.HasPrefix(rs.Text(), "# Time:") {
-			continue
-		}
-		si, skipscan, err = parseSlowInfo(rs)
-		if err != nil {
+	for p.ScanBlock(&si) {
+		if p.Err() != nil {
 			log.Println(err.Error())
 			continue
 		}
 		w.Write(si.Serialize())
+		si = SlowInfo{}
 	}
-	if err := rs.Err(); err != nil {
+	if err := p.Err(); err != nil {
 		log.Fatal("error while parsing:", err)
 	} else {
 		fmt.Printf(" Done (took %s)\n", time.Since(t))
 	}
-}
-
-func parseSlowInfo(rs *bufio.Scanner) (si SlowInfo, skipparse bool, err error) {
-	// Time line
-	line := rs.Text()
-	si.Time, err = time.Parse("060102 15:04:05", strings.Replace(line, "# Time: ", "", 1))
-	if err != nil {
-		return SlowInfo{}, false, fmt.Errorf("could not parse time '%s'", line)
-	}
-
-	//User Line
-	if !rs.Scan() {
-		return SlowInfo{}, false, fmt.Errorf("could not scan: %v", rs.Err())
-	}
-	line = rs.Text()
-	si.User = strings.Replace(line, "# User@Host: ", "", 1)
-
-	// Query info Line
-	if !rs.Scan() {
-		return SlowInfo{}, false, fmt.Errorf("could not scan: %v", rs.Err())
-	}
-	if strings.HasPrefix(rs.Text(), "# Thread_id") && !rs.Scan() { // consume "Thread" Line
-		return SlowInfo{}, false, fmt.Errorf("could not scan: %v", rs.Err())
-	}
-	fields := strings.Fields(strings.Replace(rs.Text(), "# Query_time: ", "", 1))
-	si.Duration, err = strconv.ParseFloat(fields[0], 64)
-	if err != nil {
-		return SlowInfo{}, false, fmt.Errorf("could not parse Query_time '%s': %v", fields[0], err)
-	}
-	si.LockDuration, err = strconv.ParseFloat(fields[2], 64)
-	if err != nil {
-		return SlowInfo{}, false, fmt.Errorf("could not parse Lock_time '%s': %v", fields[0], err)
-	}
-	si.RowsSent, err = strconv.ParseInt(fields[4], 10, 64)
-	if err != nil {
-		return SlowInfo{}, false, fmt.Errorf("could not parse Rows_sent '%s': %v", fields[0], err)
-	}
-	si.RowsExamined, err = strconv.ParseInt(fields[6], 10, 64)
-	if err != nil {
-		return SlowInfo{}, false, fmt.Errorf("could not parse Rows_examined '%s': %v", fields[0], err)
-	}
-
-	// Query detail Lines
-	for rs.Scan() {
-		if strings.HasPrefix(rs.Text(), "# Time:") {
-			skipparse = true
-			return
-		}
-		si.Query += rs.Text() + "\n"
-	}
-	return si, false, rs.Err()
 }

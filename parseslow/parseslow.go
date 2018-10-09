@@ -152,14 +152,14 @@ func main() {
 	p := parser.New(f)
 	var si SlowInfo
 	for p.ScanBlock(&si) {
-		if p.Err() != nil {
+		if p.BlockErr() != nil {
 			log.Println(err.Error())
 			continue
 		}
 		w.Write(si.Serialize())
 		si = SlowInfo{}
 	}
-	if err := p.Err(); err != nil {
+	if err := p.BlockErr(); err != nil {
 		log.Fatal("error while parsing:", err)
 	} else {
 		fmt.Printf(" Done (took %s)\n", time.Since(t))

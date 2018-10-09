@@ -45,9 +45,10 @@ func (p *Parser) KeepCurrentLine() bool {
 	return p.keepCurrentLine
 }
 
+func (p *Parser) BlockErr() error {
+	return p.err
+}
 func (p *Parser) Err() error {
-	if p.err != nil {
-		p.err = p.Scanner.Err()
-	}
+	p.err = p.Scanner.Err()
 	return p.err
 }

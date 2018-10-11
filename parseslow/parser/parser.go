@@ -5,6 +5,10 @@ import (
 	"io"
 )
 
+const (
+	bufferSizeKb int = 256
+)
+
 type Block interface {
 	FirstLineFound(line string) bool
 	Parse(*Parser) (keepGoing, keepCurrentLine bool, err error)
@@ -17,7 +21,9 @@ type Parser struct {
 }
 
 func New(r io.Reader) *Parser {
-	return &Parser{Scanner: bufio.NewScanner(r)}
+	p := &Parser{Scanner: bufio.NewScanner(r)}
+	p.Buffer(make([]byte, bufferSizeKb*1024/2), bufferSizeKb*1024)
+	return p
 }
 
 func (p *Parser) ScanBlock(block Block) (keepGoing bool) {

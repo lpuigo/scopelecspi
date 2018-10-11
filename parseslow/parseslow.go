@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+const (
+	maxQueryLength int = 32*1024 - 20
+)
+
 type SlowInfo struct {
 	Time         time.Time
 	User         string
@@ -76,8 +80,24 @@ func (si *SlowInfo) Parse(p *parser.Parser) (keepGoing, keepCurrentLine bool, er
 	return false, false, p.Err()
 }
 
-func (si *SlowInfo) Serialize() (row []string) {
+func (si *SlowInfo) BoundedQuery() (query, bounded string) {
+	qSize := len(si.Query)
+	bounded = strconv.FormatInt(int64(qSize), 10)
+	if qSize >= maxQueryLength {
+		return si.Query[:maxQueryLength], bounded
+	}
+	return si.Query, bounded
+}
+
+func (si SlowInfo) Header() []string {
+	return []string{
+		"Time", "User", "Duration", "LockDuration", "Rows_Sent", "Rows_Examined", "ReqType", "Info", "Query", "BoundedQuery",
+	}
+}
+
+func (si *SlowInfo) Strings() (row []string) {
 	reqtype, info := si.Info()
+	query, bounded := si.BoundedQuery()
 	return []string{
 		si.Time.Format("2006-01-02 15:04:05"),
 		si.User,
@@ -86,7 +106,7 @@ func (si *SlowInfo) Serialize() (row []string) {
 		fmt.Sprintf("%d", si.RowsSent),
 		fmt.Sprintf("%d", si.RowsExamined),
 		reqtype, info,
-		si.Query,
+		query, bounded,
 	}
 }
 
@@ -142,12 +162,10 @@ func main() {
 	t := time.Now()
 
 	w := csv.NewWriter(of)
-	defer w.Flush()
 	w.Comma = ';'
+	defer w.Flush()
 
-	w.Write([]string{
-		"Time", "User", "Duration", "LockDuration", "Rows_Sent", "Rows_Examined", "ReqType", "Info", "Query",
-	})
+	w.Write(SlowInfo{}.Header())
 
 	p := parser.New(f)
 	var si SlowInfo
@@ -156,7 +174,7 @@ func main() {
 			log.Println(err.Error())
 			continue
 		}
-		w.Write(si.Serialize())
+		w.Write(si.Strings())
 		si = SlowInfo{}
 	}
 	if err := p.BlockErr(); err != nil {

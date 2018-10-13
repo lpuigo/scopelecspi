@@ -2,9 +2,15 @@ package nginx
 
 import (
 	"fmt"
+	"github.com/lpuig/scopelecspi/parsetop/stat"
 	"sort"
 	"time"
 )
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Percentile Function
+//
 
 type Visitor struct {
 	Id       string
@@ -46,11 +52,10 @@ func (sv *ServerVisitor) IsContiguous(t time.Time, dur time.Duration) bool {
 }
 
 func (sv *ServerVisitor) Append(record Record) {
-	_, host, _, _ := record.RequestInfo()
-	uv, found := sv.Servers[host]
+	uv, found := sv.Servers[record.Host]
 	if !found {
 		uv = NewUniqueVisitor()
-		sv.Servers[host] = uv
+		sv.Servers[record.Host] = uv
 	}
 	uv.Append(record)
 }
@@ -69,6 +74,108 @@ func (sv *ServerVisitor) String() string {
 			nbAction += vis.NbAction
 		}
 		res += fmt.Sprintf("\t %s: %d user - %d actions\n", s, len(v.visitors), nbAction)
+	}
+	return res
+}
+
+func CalcServerVisitorStats(svs []ServerVisitor, pcts []float64) []stat.Stat {
+	res := make([]stat.Stat, len(svs))
+	for i, sv := range svs {
+		visitorStat := stat.Stat{Time: sv.Time}
+		for server, uv := range sv.Servers {
+			visitorStat.FloatValues[server] = float64(len(uv.visitors))
+		}
+		res[i] = visitorStat
+	}
+	return res
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Percentile Function
+//
+
+type QueryStats struct {
+	Query map[string][]float64
+}
+
+func (qs *QueryStats) Append(record Record) {
+	if record.RequestTime == 0 {
+		return
+	}
+	if _, found := qs.Query[record.Querypath]; !found {
+		qs.Query[record.Querypath] = []float64{}
+	}
+	qs.Query[record.Querypath] = append(qs.Query[record.Querypath], record.RequestTime)
+}
+
+func (qs *QueryStats) CalcDurationPercentile(t time.Time, pcts []float64) stat.Stat {
+	res := stat.Stat{Time: t}
+	for queryPath, durations := range qs.Query {
+		pctDur := percentile(durations, pcts)
+		for i, p := range pcts {
+			res.FloatValues[fmt.Sprintf("Time %d%% %s", int(p*100), queryPath)] = pctDur[i]
+		}
+	}
+	return res
+}
+
+func NewQueryStats() *QueryStats {
+	return &QueryStats{make(map[string][]float64)}
+}
+
+type ServerQueryStats struct {
+	Time    time.Time
+	Servers map[string]*QueryStats
+}
+
+func (sqs *ServerQueryStats) Prepare(t time.Time, dur time.Duration) {
+	sqs.Time = t.Round(dur)
+	sqs.Servers = make(map[string]*QueryStats)
+}
+
+func (sqs *ServerQueryStats) IsContiguous(t time.Time, dur time.Duration) bool {
+	return t.Round(dur).Equal(sqs.Time)
+}
+
+func (sqs *ServerQueryStats) Append(record Record) {
+	qs, found := sqs.Servers[record.Host]
+	if !found {
+		qs = NewQueryStats()
+		sqs.Servers[record.Host] = qs
+	}
+	qs.Append(record)
+}
+
+func CalcServerQueryDurationPercentileStats(sqss []ServerQueryStats, pcts []float64) map[string][]stat.Stat {
+	res := make(map[string][]stat.Stat)
+	for _, sqs := range sqss {
+		for server, qs := range sqs.Servers {
+			durStat := qs.CalcDurationPercentile(sqs.Time, pcts)
+			if _, found := res[server]; !found {
+				res[server] = []stat.Stat{durStat}
+			} else {
+				res[server] = append(res[server], durStat)
+			}
+		}
+	}
+	return res
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Percentile Function
+//
+
+func percentile(l []float64, pcts []float64) []float64 {
+	res := make([]float64, len(pcts))
+	if len(l) == 0 {
+		return res
+	}
+	sort.Float64s(l)
+	length := float64(len(l) - 1)
+	for i, p := range pcts {
+		res[i] = l[int(length*p)]
 	}
 	return res
 }

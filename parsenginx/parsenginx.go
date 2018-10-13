@@ -42,7 +42,7 @@ func main() {
 	lines := launchScanner(done, f)
 	records := launchParser(done, lines)
 	records1, records2 := tee(done, records)
-	statsReady := launchAggregator(done, records1, &stats, time.Minute*5)
+	statsReady := launchServerVisitorAggregator(done, records1, &stats, time.Minute*5)
 
 	t := time.Now()
 	w.Write(nginx.Record{}.HeaderStrings())
@@ -61,7 +61,6 @@ func main() {
 	for _, st := range stats {
 		fmt.Print(st.String())
 	}
-
 }
 
 func outFile(infile, ext string) string {
@@ -124,7 +123,7 @@ func launchParser(done chan interface{}, entries <-chan Entry) (out <-chan nginx
 	return outChan
 }
 
-func launchAggregator(done chan interface{}, records <-chan nginx.Record, serversVisitor *[]nginx.ServerVisitor, timelaps time.Duration) (terminated <-chan interface{}) {
+func launchServerVisitorAggregator(done chan interface{}, records <-chan nginx.Record, serversVisitor *[]nginx.ServerVisitor, timelaps time.Duration) (terminated <-chan interface{}) {
 	finished := make(chan interface{})
 	go func(done chan interface{}, records <-chan nginx.Record, timelaps time.Duration) {
 		defer close(finished)
@@ -146,6 +145,32 @@ func launchAggregator(done chan interface{}, records <-chan nginx.Record, server
 			curServVisitor.Append(record)
 		}
 		*serversVisitor = append(*serversVisitor, curServVisitor)
+	}(done, records, timelaps)
+	return finished
+}
+
+func launchServerQueryStatsAggregator(done chan interface{}, records <-chan nginx.Record, serversQueryStats *[]nginx.ServerQueryStats, timelaps time.Duration) (terminated <-chan interface{}) {
+	finished := make(chan interface{})
+	go func(done chan interface{}, records <-chan nginx.Record, timelaps time.Duration) {
+		defer close(finished)
+		curServQStats := nginx.ServerQueryStats{}
+		for record := range records {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			if curServQStats.Time.IsZero() {
+				curServQStats.Prepare(record.Time, timelaps)
+			}
+			if !curServQStats.IsContiguous(record.Time, timelaps) {
+				*serversQueryStats = append(*serversQueryStats, curServQStats)
+				curServQStats = nginx.ServerQueryStats{}
+				curServQStats.Prepare(record.Time, timelaps)
+			}
+			curServQStats.Append(record)
+		}
+		*serversQueryStats = append(*serversQueryStats, curServQStats)
 	}(done, records, timelaps)
 	return finished
 }

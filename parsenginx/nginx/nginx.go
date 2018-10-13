@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type Field struct {
+type Record struct {
 	Time                 time.Time
 	Client               string
 	User                 string
@@ -23,6 +23,11 @@ type Field struct {
 	RequestTime          float64
 	UpstreamResponseTime float64
 	UpstreamHeaderTime   float64
+
+	Scheme    string
+	Host      string
+	Querypath string
+	Uri       string
 }
 
 var re *regexp.Regexp
@@ -31,7 +36,7 @@ func init() {
 	re = regexp.MustCompile(`(\w+)=(".+?"|\S+)`)
 }
 
-func (f *Field) HeaderStrings() []string {
+func (f Record) HeaderStrings() []string {
 	return []string{
 		"Time",
 		"Client",
@@ -50,16 +55,15 @@ func (f *Field) HeaderStrings() []string {
 	}
 }
 
-func (f *Field) Strings() []string {
-	scheme, host, querypath, uri := f.RequestInfo()
+func (f *Record) Strings() []string {
 	return []string{
 		f.Time.Format("02/01/2006 15:04:05"),
 		f.Client,
 		f.User,
-		scheme,
-		host,
-		querypath,
-		uri,
+		f.Scheme,
+		f.Host,
+		f.Querypath,
+		f.Uri,
 		f.Status,
 		strings.Replace(strconv.FormatFloat(f.RequestTime, 'f', 3, 64), ".", ",", -1),
 		strings.Replace(strconv.FormatFloat(f.UpstreamResponseTime, 'f', 3, 64), ".", ",", -1),
@@ -70,8 +74,11 @@ func (f *Field) Strings() []string {
 	}
 }
 
-func (f *Field) Parse(line string) (err error) {
+func (f *Record) Parse(line string) (err error) {
 	allIndexes := re.FindAllStringSubmatch("time="+line, -1)
+	if allIndexes == nil {
+		return fmt.Errorf("not a nginx record")
+	}
 	for _, loc := range allIndexes {
 		key := loc[1]
 		value := loc[2]
@@ -119,10 +126,11 @@ func (f *Field) Parse(line string) (err error) {
 			return
 		}
 	}
+	f.Scheme, f.Host, f.Querypath, f.Uri = f.RequestInfo()
 	return
 }
 
-func (f *Field) RequestInfo() (scheme, host, querypath, URI string) {
+func (f *Record) RequestInfo() (scheme, host, querypath, URI string) {
 	u, err := url.Parse(f.Referer)
 	if err != nil {
 		panic(err)

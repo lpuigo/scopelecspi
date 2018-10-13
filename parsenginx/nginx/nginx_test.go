@@ -11,7 +11,7 @@ const (
 )
 
 func TestField_Parse(t *testing.T) {
-	f := Field{}
+	f := Record{}
 	err := f.Parse(testField)
 	if err != nil {
 		t.Fatal("NewFieldFromLine returns", err)
@@ -19,7 +19,7 @@ func TestField_Parse(t *testing.T) {
 }
 
 func TestField_URIRequest(t *testing.T) {
-	f := Field{}
+	f := Record{}
 	err := f.Parse(testField)
 	if err != nil {
 		t.Fatal("NewFieldFromLine returns", err)

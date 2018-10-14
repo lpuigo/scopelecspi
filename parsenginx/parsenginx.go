@@ -3,52 +3,70 @@ package main
 import (
 	"bufio"
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"github.com/lpuig/scopelecspi/parsenginx/nginx"
 	"github.com/lpuig/scopelecspi/parsetop/gfx"
+	"github.com/lpuig/scopelecspi/parsetop/stat"
+	"gonum.org/v1/plot/palette"
 	"image/color"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	file string = `C:\Users\Laurent\Golang\src\github.com\lpuig\scopelecspi\parsenginx\test\access.log`
+	defaultVisitorInterval int = 15
+	defaultQueryInterval   int = 15
 )
 
-func main() {
+type Options struct {
+	VisitorInterval int
+	QueryInterval   int
+}
+
+func (opts Options) processFile(file string) error {
 	f, err := os.Open(file)
 	if err != nil {
-		log.Fatal("could not open file:", err)
+		return fmt.Errorf("could not open file: %v", err)
 	}
 	defer f.Close()
 
 	outfile := outFile(file, ".csv")
 	of, err := os.Create(outfile)
 	if err != nil {
-		log.Fatal("could not create file:", err)
+		return fmt.Errorf("could not create file: %v", err)
 	}
 	defer of.Close()
-	fmt.Printf("writing result to '%s' ...\n", outfile)
 
 	w := csv.NewWriter(of)
 	w.Comma = ';'
 	defer w.Flush()
 
 	serverVisitors := []nginx.ServerVisitor{}
+	serverQueryStat := []nginx.ServerQueryStats{}
 
 	done := make(chan interface{})
 	lines := launchScanner(done, f)
 	records := launchParser(done, lines)
 	records1, records2 := tee(done, records)
-	statsReady := launchServerVisitorAggregator(done, records1, &serverVisitors, time.Minute*5)
+	records21, records22 := tee(done, records2)
+	statsVisitorsReady := launchServerVisitorAggregator(done, records21, &serverVisitors, time.Minute*time.Duration(opts.VisitorInterval))
+	statsQuerysReady := launchServerQueryStatsAggregator(done, records22, &serverQueryStat, time.Minute*time.Duration(opts.QueryInterval))
+
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	go GraphUniqueVisitor(wg, statsVisitorsReady, &serverVisitors, file)
+	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, []float64{0.5, 0.8, .99}, file)
 
 	t := time.Now()
 	w.Write(nginx.Record{}.HeaderStrings())
-	for f := range records2 {
+	for f := range records1 {
 		err := w.Write(f.Strings())
 		if err != nil {
 			log.Printf("could not write record: %v\n", err)
@@ -56,23 +74,36 @@ func main() {
 			continue
 		}
 	}
+	fmt.Printf("Done writing csv file '%s' (took %s)\n", outfile, time.Since(t))
 
-	fmt.Printf("Done (took %s)\n", time.Since(t))
+	wg.Wait()
+	return nil
+}
 
-	<-statsReady
-	fmt.Printf("Generating Graphs ...\n")
-	t = time.Now()
-	servUniqVisitorsStats, servList := nginx.CalcServerVisitorStats(serverVisitors)
-	splot1 := gfx.NewSinglePlot("Unique Visitors", servUniqVisitorsStats)
-	for _, server := range servList {
-		splot1.AddLine(server, color.RGBA{R: 128, A: 255})
+func main() {
+	opts := Options{
+		VisitorInterval: defaultVisitorInterval,
+		QueryInterval:   defaultQueryInterval,
 	}
-	err = splot1.Save(outFile(file, ".visitors.png"))
-	if err != nil {
-		log.Printf("could not  save Unique Visitor plot: %v\n", err)
-	}
-	fmt.Printf("Done (took %s)\n", time.Since(t))
 
+	flag.IntVar(&opts.VisitorInterval, "v", defaultVisitorInterval, "Unique Visitor interval (n minutes)")
+	flag.IntVar(&opts.QueryInterval, "q", defaultQueryInterval, "Query Duration interval (n minutes)")
+	flag.Parse()
+
+	if len(flag.Args()) == 0 {
+		log.Fatalf(`Usage : %s access.log [...] (one or more acces.log NGinx files)
+Will produce (per given files):
+	- access.csv                   (csv file with formated stats for XLS usage)
+	- access.queries.<host>.#.png  (png files per hosts, showing Query duration info (from longuest to shortest))
+	- access.visitors.png          (png file showing Unique Visitor stat per Host Server)
+`,
+			filepath.Base(os.Args[0]))
+	}
+
+	for _, file := range flag.Args() {
+		fmt.Printf("Processing '%s' ...\n", file)
+		opts.processFile(file)
+	}
 }
 
 func outFile(infile, ext string) string {
@@ -187,6 +218,110 @@ func launchServerQueryStatsAggregator(done chan interface{}, records <-chan ngin
 	return finished
 }
 
+func GraphUniqueVisitor(wg *sync.WaitGroup, statsVisitorsReady <-chan interface{}, serverVisitors *[]nginx.ServerVisitor, inFile string) {
+	defer wg.Done()
+	<-statsVisitorsReady
+	t := time.Now()
+	servUniqVisitorsStats, servList := nginx.CalcServerVisitorStats(*serverVisitors)
+	splot1 := gfx.NewSinglePlot("Unique Visitors", servUniqVisitorsStats)
+	colors := genPalette(len(servList), 1, 1)
+	for i, server := range servList {
+		splot1.AddLine(server, colors[i])
+	}
+	err := splot1.Save(outFile(inFile, ".visitors.png"))
+	if err != nil {
+		log.Printf("could not save Unique Visitor plot: %v\n", err)
+	}
+	fmt.Printf("Generating Unique Visitors Stats Graph (took %s)\n", time.Since(t))
+}
+func GraphQueryDuration(wg *sync.WaitGroup, statsQuerysReady <-chan interface{}, serverQueryStat *[]nginx.ServerQueryStats, pcts []float64, infile string) {
+	defer wg.Done()
+	<-statsQuerysReady
+	t := time.Now()
+	servQueriesStats, servList := nginx.CalcServerQueryDurationPercentileStats(*serverQueryStat, pcts)
+	nbLines := 3 * len(pcts)
+	for _, server := range servList {
+
+		grapher := newGrapher(nbLines, 3, "Query Duration on "+server, servQueriesStats[server].Stats)
+
+		// Calc sorted DurationSeries name list
+		qsnames := []string{}
+		for name, _ := range servQueriesStats[server].QuerySet {
+			qsnames = append(qsnames, name)
+		}
+		sort.Slice(qsnames, func(i, j int) bool {
+			iname, jname := qsnames[i], qsnames[j]
+			idur, jdur := servQueriesStats[server].QuerySet[iname], servQueriesStats[server].QuerySet[jname]
+			if idur == jdur {
+				return iname > jname
+			}
+			return idur > jdur
+		})
+
+		colors := genPalette(nbLines, 1, 1)
+		for i, qsname := range qsnames {
+			grapher.AddLine(qsname, colors[i%nbLines])
+		}
+		err := grapher.GenGraph(infile, server)
+		if err != nil {
+			log.Printf("could not generate graph:%v\n", err)
+		}
+	}
+	fmt.Printf("Generating Query Duration Stats Graph (took %s)\n", time.Since(t))
+}
+
+type grapher struct {
+	title      string
+	stats      []stat.Stat
+	splots     []*gfx.SinglePlot
+	lineLimit  int
+	graphLimit int
+}
+
+func newGrapher(lineLimit, graphLimit int, title string, stats []stat.Stat) grapher {
+	return grapher{
+		title:      title,
+		stats:      stats,
+		lineLimit:  lineLimit,
+		graphLimit: graphLimit,
+	}
+}
+
+func (g *grapher) AddLine(valueSet string, c color.RGBA) {
+	curPlot := len(g.splots) - 1
+	if curPlot < 0 || g.splots[curPlot].NbLines() == g.lineLimit {
+		g.splots = append(g.splots, gfx.NewSinglePlot(g.title, g.stats))
+		curPlot++
+	}
+	g.splots[curPlot].AddLine(valueSet, c)
+}
+
+func (g *grapher) GenGraph(infile, servername string) error {
+	numGraph := 1
+	for i := 0; i < len(g.splots); i += g.graphLimit {
+		size := g.graphLimit
+		if i+size >= len(g.splots) {
+			size = len(g.splots) - i
+		}
+		mplot := gfx.NewMultiPlot(g.splots[i : i+size]...)
+		err := mplot.AlignVertical()
+		if err != nil {
+			return fmt.Errorf("could not align multiplot:", err)
+		}
+		err = mplot.Save(outFile(infile, fmt.Sprintf(".queries.%s.%d.png", servername, numGraph)))
+		if err != nil {
+			return fmt.Errorf("could not save server queries plot: %v\n", err)
+		}
+		numGraph++
+	}
+	return nil
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Channel Tools functions
+//
+
 func orDone(done chan interface{}, c <-chan nginx.Record) <-chan nginx.Record {
 	valStream := make(chan nginx.Record)
 	go func() {
@@ -229,4 +364,31 @@ func tee(done chan interface{}, in <-chan nginx.Record) (_, _ <-chan nginx.Recor
 		}
 	}()
 	return out1, out2
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Color related functions
+//
+
+func genPalette(n int, val, sat float64) (colors []color.RGBA) {
+	colors = make([]color.RGBA, n)
+	dv := 1.0 / float64(n)
+	for i := 0; i < n; i++ {
+		fi := float64(i)
+		c := palette.HSVA{fi * dv, sat, val, 1}
+		colors[i] = color.RGBAModel.Convert(c).(color.RGBA)
+	}
+	return
+}
+
+func darken(c color.RGBA, f float64) color.RGBA {
+	r, g, b, a := c.RGBA()
+	nr, ng, nb := r>>8, g>>8, b>>8
+	return color.RGBA{
+		uint8(float64(nr) * f),
+		uint8(float64(ng) * f),
+		uint8(float64(nb) * f),
+		uint8(a),
+	}
 }

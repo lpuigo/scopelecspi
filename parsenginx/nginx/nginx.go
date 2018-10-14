@@ -143,5 +143,9 @@ func (f *Record) RequestInfo() (scheme, host, querypath, URI string) {
 	if err != nil {
 		panic(err)
 	}
-	return u.Scheme, u.Host, fmt.Sprintf("%s %s", f.Method, u2.Path), s[1]
+	host = u.Host
+	if host == "" {
+		host = "localhost"
+	}
+	return u.Scheme, host, fmt.Sprintf("%s %s", f.Method, u2.Path), s[1]
 }

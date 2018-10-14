@@ -115,12 +115,16 @@ func (qs *QueryStats) Append(record Record) {
 	qs.Query[record.Querypath] = append(qs.Query[record.Querypath], record.RequestTime)
 }
 
-func (qs *QueryStats) CalcDurationPercentile(t time.Time, pcts []float64) stat.Stat {
-	res := stat.Stat{Time: t}
+func (qs *QueryStats) CalcDurationPercentile(t time.Time, sq map[string]float64, pcts []float64) stat.Stat {
+	res := stat.NewStat(t)
 	for queryPath, durations := range qs.Query {
-		pctDur := percentile(durations, pcts)
+		pctDur, maxDur := percentile(durations, pcts)
 		for i, p := range pcts {
-			res.FloatValues[fmt.Sprintf("Time %d%% %s", int(p*100), queryPath)] = pctDur[i]
+			serieName := fmt.Sprintf("%s %3d%%", queryPath, int(p*100))
+			res.FloatValues[serieName] = pctDur[i]
+			if sq[serieName] <= maxDur {
+				sq[serieName] = maxDur
+			}
 		}
 	}
 	return res
@@ -153,19 +157,35 @@ func (sqs *ServerQueryStats) Append(record Record) {
 	qs.Append(record)
 }
 
-func CalcServerQueryDurationPercentileStats(sqss []ServerQueryStats, pcts []float64) map[string][]stat.Stat {
-	res := make(map[string][]stat.Stat)
+type StatsQueries struct {
+	Stats    []stat.Stat
+	QuerySet map[string]float64
+}
+
+func newStatsQueries() *StatsQueries {
+	return &StatsQueries{
+		QuerySet: make(map[string]float64),
+	}
+}
+
+func CalcServerQueryDurationPercentileStats(sqss []ServerQueryStats, pcts []float64) (statsmap map[string]*StatsQueries, servers []string) {
+	statsmap = make(map[string]*StatsQueries)
 	for _, sqs := range sqss {
 		for server, qs := range sqs.Servers {
-			durStat := qs.CalcDurationPercentile(sqs.Time, pcts)
-			if _, found := res[server]; !found {
-				res[server] = []stat.Stat{durStat}
-			} else {
-				res[server] = append(res[server], durStat)
+			sq, found := statsmap[server]
+			if !found {
+				sq = newStatsQueries()
+				statsmap[server] = sq
 			}
+			durStat := qs.CalcDurationPercentile(sqs.Time, sq.QuerySet, pcts)
+			sq.Stats = append(sq.Stats, durStat)
 		}
 	}
-	return res
+	for k, _ := range statsmap {
+		servers = append(servers, k)
+	}
+	sort.Strings(servers)
+	return
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,15 +193,17 @@ func CalcServerQueryDurationPercentileStats(sqss []ServerQueryStats, pcts []floa
 // Percentile Function
 //
 
-func percentile(l []float64, pcts []float64) []float64 {
-	res := make([]float64, len(pcts))
+func percentile(l []float64, pcts []float64) (values []float64, max float64) {
+	values = make([]float64, len(pcts))
 	if len(l) == 0 {
-		return res
+		max = 0
+		return
 	}
 	sort.Float64s(l)
 	length := float64(len(l) - 1)
 	for i, p := range pcts {
-		res[i] = l[int(length*p)]
+		values[i] = l[int(length*p)]
 	}
-	return res
+	max = l[len(l)-1]
+	return
 }

@@ -39,11 +39,11 @@ func (mp *MultiPlot) AlignVertical() error {
 func (mp *MultiPlot) Save(imgfile string) error {
 	rows := len(mp.plots)
 	if rows == 0 {
-		return fmt.Errorf("could not Save: plots are not aligned")
+		return fmt.Errorf("plots are not aligned")
 	}
 	cols := len(mp.plots[0])
 	if cols == 0 {
-		return fmt.Errorf("could not Save: first row is empty")
+		return fmt.Errorf("first row is empty")
 	}
 
 	filetype := strings.ToLower(filepath.Ext(imgfile))

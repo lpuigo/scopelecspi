@@ -24,6 +24,10 @@ func (sp *SinglePlot) AddLine(valueSet string, c color.RGBA) {
 	sp.lines = append(sp.lines, lineInfo{valueSet: valueSet, color: c})
 }
 
+func (sp SinglePlot) NbLines() int {
+	return len(sp.lines)
+}
+
 type lineInfo struct {
 	valueSet string
 	color    color.RGBA

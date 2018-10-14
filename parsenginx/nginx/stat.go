@@ -9,7 +9,7 @@ import (
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Percentile Function
+// UniqueVisitor Stat per Server Functions
 //
 
 type Visitor struct {
@@ -78,21 +78,27 @@ func (sv *ServerVisitor) String() string {
 	return res
 }
 
-func CalcServerVisitorStats(svs []ServerVisitor, pcts []float64) []stat.Stat {
+func CalcServerVisitorStats(svs []ServerVisitor) (stats []stat.Stat, servers []string) {
 	res := make([]stat.Stat, len(svs))
+	servSet := map[string]int{}
 	for i, sv := range svs {
-		visitorStat := stat.Stat{Time: sv.Time}
+		visitorStat := stat.NewStat(sv.Time)
 		for server, uv := range sv.Servers {
+			servSet[server] = 1
 			visitorStat.FloatValues[server] = float64(len(uv.visitors))
 		}
 		res[i] = visitorStat
 	}
-	return res
+	for k, _ := range servSet {
+		servers = append(servers, k)
+	}
+	sort.Strings(servers)
+	return res, servers
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Percentile Function
+// QueryPath Stat per Server Functions
 //
 
 type QueryStats struct {

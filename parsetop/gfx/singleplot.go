@@ -79,6 +79,7 @@ type TimeTicker struct {
 }
 
 func (tt TimeTicker) Ticks(min, max float64) []plot.Tick {
+	tt.setTicks(min, max)
 	minDur := time.Duration(tt.Minor) * time.Minute
 	minDurSec := float64(tt.Minor * 60)
 	totime := plot.UTCUnixTime
@@ -101,4 +102,36 @@ func (tt TimeTicker) Ticks(min, max float64) []plot.Tick {
 	}
 
 	return ticks
+}
+
+func (tt *TimeTicker) setTicks(min, max float64) {
+	nbTicks := (max - min) / float64(tt.Minor*60)
+	major := map[int]int{
+		1:    4,
+		3:    4,
+		5:    4,
+		10:   4,
+		30:   8,
+		60:   8,
+		180:  8,
+		240:  6,
+		1440: 7,
+	}
+	defer func() { tt.Major = major[tt.Minor] }()
+	if nbTicks < 10 {
+		tt.Major = 4
+		for _, tt.Minor = range []int{10, 5, 3, 1} {
+			if (max-min)/float64(tt.Minor*60) >= 10 {
+				return
+			}
+		}
+	}
+	if nbTicks > 40 {
+		for _, tt.Minor = range []int{30, 60, 180, 240, 1440} {
+			if (max-min)/float64(tt.Minor*60) <= 40 {
+				return
+			}
+		}
+	}
+	return
 }

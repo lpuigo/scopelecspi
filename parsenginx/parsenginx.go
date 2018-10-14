@@ -5,6 +5,8 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/lpuig/scopelecspi/parsenginx/nginx"
+	"github.com/lpuig/scopelecspi/parsetop/gfx"
+	"image/color"
 	"io"
 	"log"
 	"os"
@@ -36,13 +38,13 @@ func main() {
 	w.Comma = ';'
 	defer w.Flush()
 
-	stats := []nginx.ServerVisitor{}
+	serverVisitors := []nginx.ServerVisitor{}
 
 	done := make(chan interface{})
 	lines := launchScanner(done, f)
 	records := launchParser(done, lines)
 	records1, records2 := tee(done, records)
-	statsReady := launchServerVisitorAggregator(done, records1, &stats, time.Minute*5)
+	statsReady := launchServerVisitorAggregator(done, records1, &serverVisitors, time.Minute*5)
 
 	t := time.Now()
 	w.Write(nginx.Record{}.HeaderStrings())
@@ -58,9 +60,19 @@ func main() {
 	fmt.Printf("Done (took %s)\n", time.Since(t))
 
 	<-statsReady
-	for _, st := range stats {
-		fmt.Print(st.String())
+	fmt.Printf("Generating Graphs ...\n")
+	t = time.Now()
+	servUniqVisitorsStats, servList := nginx.CalcServerVisitorStats(serverVisitors)
+	splot1 := gfx.NewSinglePlot("Unique Visitors", servUniqVisitorsStats)
+	for _, server := range servList {
+		splot1.AddLine(server, color.RGBA{R: 128, A: 255})
 	}
+	err = splot1.Save(outFile(file, ".visitors.png"))
+	if err != nil {
+		log.Printf("could not  save Unique Visitor plot: %v\n", err)
+	}
+	fmt.Printf("Done (took %s)\n", time.Since(t))
+
 }
 
 func outFile(infile, ext string) string {

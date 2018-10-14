@@ -306,7 +306,7 @@ func (g *grapher) GenGraph(infile, servername string) error {
 		mplot := gfx.NewMultiPlot(g.splots[i : i+size]...)
 		err := mplot.AlignVertical()
 		if err != nil {
-			return fmt.Errorf("could not align multiplot:", err)
+			return fmt.Errorf("could not align multiplot: %v", err)
 		}
 		err = mplot.Save(outFile(infile, fmt.Sprintf(".queries.%s.%d.png", servername, numGraph)))
 		if err != nil {

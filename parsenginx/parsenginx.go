@@ -76,8 +76,8 @@ func (opts Options) processFile(file string) error {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
-	go GraphUniqueVisitor(wg, statsVisitorsReady, &serverVisitors, file)
-	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, []float64{0.8, 0.9, .99}, file)
+	go GraphUniqueVisitor(wg, statsVisitorsReady, &serverVisitors, opts.file)
+	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, []float64{0.8, 0.9, .99}, opts.file)
 
 	t := time.Now()
 	w.Write(nginx.Record{}.HeaderStrings())
@@ -242,12 +242,16 @@ func GraphUniqueVisitor(wg *sync.WaitGroup, statsVisitorsReady <-chan interface{
 	<-statsVisitorsReady
 	t := time.Now()
 	servUniqVisitorsStats, servList := nginx.CalcServerVisitorStats(*serverVisitors)
-	splot1 := gfx.NewSinglePlot("Unique Visitors", servUniqVisitorsStats)
-	colors := genPalette(len(servList), 1, 1)
+	nbLines := 4
+	// splot1 := gfx.NewSinglePlot("Unique Visitors", servUniqVisitorsStats)
+	grapher := newGrapher(nbLines, 2, "Unique Visitor (same @IP and webbrowser)", servUniqVisitorsStats)
+	colors := genPalette(nbLines, 0.9, 1)
 	for i, server := range servList {
-		splot1.AddLine(server, colors[i])
+		grapher.AddLine(server, colors[i%nbLines])
 	}
-	err := splot1.Save(outFile(inFile, ".visitors.png"))
+	err := grapher.GenGraph(inFile, func(numGraph int) string {
+		return fmt.Sprintf(".Visitors.%d.png", numGraph)
+	})
 	if err != nil {
 		log.Printf("could not save Unique Visitor plot: %v\n", err)
 	}
@@ -281,7 +285,9 @@ func GraphQueryDuration(wg *sync.WaitGroup, statsQuerysReady <-chan interface{},
 		for i, qsname := range qsnames {
 			grapher.AddLine(qsname, colors[i%nbLines])
 		}
-		err := grapher.GenGraph(infile, server)
+		err := grapher.GenGraph(infile, func(numGraph int) string {
+			return fmt.Sprintf(".queries.%s.%d.png", server, numGraph)
+		})
 		if err != nil {
 			log.Printf("could not generate graph:%v\n", err)
 		}
@@ -315,7 +321,7 @@ func (g *grapher) AddLine(valueSet string, c color.RGBA) {
 	g.splots[curPlot].AddLine(valueSet, c)
 }
 
-func (g *grapher) GenGraph(infile, servername string) error {
+func (g *grapher) GenGraph(infile string, fileExtention func(numGraph int) string) error {
 	numGraph := 1
 	for i := 0; i < len(g.splots); i += g.graphLimit {
 		size := g.graphLimit
@@ -327,7 +333,7 @@ func (g *grapher) GenGraph(infile, servername string) error {
 		if err != nil {
 			return fmt.Errorf("could not align multiplot: %v", err)
 		}
-		err = mplot.Save(outFile(infile, fmt.Sprintf(".queries.%s.%d.png", servername, numGraph)))
+		err = mplot.Save(outFile(infile, fileExtention(numGraph)))
 		if err != nil {
 			return fmt.Errorf("could not save server queries plot: %v\n", err)
 		}

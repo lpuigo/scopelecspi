@@ -111,10 +111,11 @@ func (tt TimeTicker) Ticks(min, max float64) []plot.Tick {
 func (tt *TimeTicker) setTicks(min, max float64) {
 	nbTicks := (max - min) / float64(tt.Minor*60)
 	major := map[int]int{
-		1:    4,
-		3:    4,
+		1:    5,
+		3:    5,
 		5:    4,
-		10:   4,
+		10:   6,
+		15:   8,
 		30:   8,
 		60:   8,
 		180:  8,
@@ -123,7 +124,6 @@ func (tt *TimeTicker) setTicks(min, max float64) {
 	}
 	defer func() { tt.Major = major[tt.Minor] }()
 	if nbTicks < 10 {
-		tt.Major = 4
 		for _, tt.Minor = range []int{10, 5, 3, 1} {
 			if (max-min)/float64(tt.Minor*60) >= 10 {
 				return

@@ -31,9 +31,23 @@ type Record struct {
 }
 
 var re *regexp.Regexp
+var queryAnonyms []QueryPathAnonym
+
+type QueryPathAnonym struct {
+	re   *regexp.Regexp
+	repl string
+}
+
+func (qpa QueryPathAnonym) Anonymize(s string) string {
+	return qpa.re.ReplaceAllString(s, qpa.repl)
+}
 
 func init() {
 	re = regexp.MustCompile(`(\w+)=(".+?"|\S+)`)
+	queryAnonyms = make([]QueryPathAnonym, 3)
+	queryAnonyms[0] = QueryPathAnonym{regexp.MustCompile("(T /assets/)(.*)"), "${1}<asset_ref>"}
+	queryAnonyms[1] = QueryPathAnonym{regexp.MustCompile("(T /dossiers/)([0-9]+)"), "${1}<num_dossier>"}
+	queryAnonyms[2] = QueryPathAnonym{regexp.MustCompile("(T /taches/)([0-9]+)"), "${1}<num_tache>"}
 }
 
 func (f Record) HeaderStrings() []string {
@@ -147,5 +161,13 @@ func (f *Record) RequestInfo() (scheme, host, querypath, URI string) {
 	if host == "" {
 		host = "localhost"
 	}
-	return u.Scheme, host, fmt.Sprintf("%s %s", f.Method, u2.Path), s[1]
+	queryPath := fmt.Sprintf("%s %s", f.Method, u2.Path)
+	for _, qa := range queryAnonyms {
+		q := qa.Anonymize(queryPath)
+		if q != queryPath {
+			queryPath = q
+			break
+		}
+	}
+	return u.Scheme, host, queryPath, s[1]
 }

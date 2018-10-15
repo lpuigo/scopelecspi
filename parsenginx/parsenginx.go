@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	defaultVisitorInterval int = 15
+	defaultVisitorInterval int = 30
 	defaultQueryInterval   int = 15
 )
 

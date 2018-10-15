@@ -1,6 +1,8 @@
 package gfx
 
-import "github.com/lpuig/scopelecspi/parsetop/stat"
+import (
+	"github.com/lpuig/scopelecspi/parsetop/stat"
+)
 
 type statXY struct {
 	value string

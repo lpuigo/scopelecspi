@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/csv"
 	"flag"
 	"fmt"
@@ -28,16 +29,30 @@ const (
 type Options struct {
 	VisitorInterval int
 	QueryInterval   int
+	file            string
 }
 
 func (opts Options) processFile(file string) error {
+	opts.file = file
+	var inReader io.Reader
 	f, err := os.Open(file)
 	if err != nil {
 		return fmt.Errorf("could not open file: %v", err)
 	}
 	defer f.Close()
+	inReader = f
 
-	outfile := outFile(file, ".csv")
+	if filepath.Ext(file) == ".gz" {
+		gzipr, err := gzip.NewReader(f)
+		if err != nil {
+			return fmt.Errorf("could not read GZIP file: %v", err)
+		}
+		defer gzipr.Close()
+		inReader = gzipr
+		opts.file = strings.Replace(opts.file, ".gz", "", -1)
+	}
+
+	outfile := outFile(opts.file, ".csv")
 	of, err := os.Create(outfile)
 	if err != nil {
 		return fmt.Errorf("could not create file: %v", err)
@@ -52,7 +67,7 @@ func (opts Options) processFile(file string) error {
 	serverQueryStat := []nginx.ServerQueryStats{}
 
 	done := make(chan interface{})
-	lines := launchScanner(done, f)
+	lines := launchScanner(done, inReader)
 	records := launchParser(done, lines)
 	records1, records2 := tee(done, records)
 	records21, records22 := tee(done, records2)
@@ -62,7 +77,7 @@ func (opts Options) processFile(file string) error {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	go GraphUniqueVisitor(wg, statsVisitorsReady, &serverVisitors, file)
-	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, []float64{0.5, 0.8, .99}, file)
+	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, []float64{0.8, 0.9, .99}, file)
 
 	t := time.Now()
 	w.Write(nginx.Record{}.HeaderStrings())
@@ -91,7 +106,7 @@ func main() {
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
-		log.Fatalf(`Usage : %s access.log [...] (one or more acces.log NGinx files)
+		log.Fatalf(`Usage : %s <filename1>.log[.gz] [<filename2>.log[.gz]...] (one or more NGinx access.log[.gz] files, gziped or not)
 Will produce (per given files):
 	- access.csv                   (csv file with formated stats for XLS usage)
 	- access.queries.<host>.#.png  (png files per hosts, showing Query duration info (from longuest to shortest))
@@ -102,7 +117,11 @@ Will produce (per given files):
 
 	for _, file := range flag.Args() {
 		fmt.Printf("Processing '%s' ...\n", file)
-		opts.processFile(file)
+		err := opts.processFile(file)
+		if err != nil {
+			log.Printf("processing aborted: %v\n", err)
+		}
+
 	}
 }
 

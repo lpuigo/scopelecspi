@@ -52,7 +52,7 @@ func (sp *SinglePlot) plotLines() (p *plot.Plot, err error) {
 	}
 
 	p.Title.Text = sp.title
-	p.X.Tick.Marker = plot.TimeTicks{Format: "2006-01-02\n15:04", Ticker: TimeTicker{Major: 8, Minor: 15}}
+	p.X.Tick.Marker = plot.TimeTicks{Format: "2006-01-02\n15:04", Ticker: TimeTicker{Minor: 15}}
 	p.X.Label.Text = "Time"
 	p.Y.Label.Text = "Values"
 
@@ -115,24 +115,26 @@ func (tt *TimeTicker) setTicks(min, max float64) {
 		3:    5,
 		5:    4,
 		10:   6,
-		15:   8,
-		30:   8,
-		60:   8,
-		180:  8,
+		15:   4,
+		30:   4,
+		60:   3,
+		180:  4,
 		240:  6,
 		1440: 7,
 	}
+	const lowTicks float64 = 20
+	const highTicks float64 = 40
 	defer func() { tt.Major = major[tt.Minor] }()
-	if nbTicks < 10 {
+	if nbTicks < lowTicks {
 		for _, tt.Minor = range []int{10, 5, 3, 1} {
-			if (max-min)/float64(tt.Minor*60) >= 10 {
+			if (max-min)/float64(tt.Minor*60) >= lowTicks {
 				return
 			}
 		}
 	}
-	if nbTicks > 40 {
+	if nbTicks > highTicks {
 		for _, tt.Minor = range []int{30, 60, 180, 240, 1440} {
-			if (max-min)/float64(tt.Minor*60) <= 40 {
+			if (max-min)/float64(tt.Minor*60) <= highTicks {
 				return
 			}
 		}

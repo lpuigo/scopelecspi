@@ -118,7 +118,8 @@ func (qs *QueryStats) Append(record Record) {
 func (qs *QueryStats) CalcDurationPercentile(t time.Time, sq map[string]float64, pcts []float64) stat.Stat {
 	res := stat.NewStat(t)
 	for queryPath, durations := range qs.Query {
-		pctDur, maxDur := percentile(durations, pcts)
+		pctDur, _ := percentile(durations, pcts)
+		maxDur := pctDur[len(pctDur)-1]
 		for i, p := range pcts {
 			serieName := fmt.Sprintf("%s %3d%%", queryPath, int(p*100))
 			res.FloatValues[serieName] = pctDur[i]

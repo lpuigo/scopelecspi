@@ -44,10 +44,9 @@ func (qpa QueryPathAnonym) Anonymize(s string) string {
 
 func init() {
 	re = regexp.MustCompile(`(\w+)=(".+?"|\S+)`)
-	queryAnonyms = make([]QueryPathAnonym, 3)
+	queryAnonyms = make([]QueryPathAnonym, 2)
 	queryAnonyms[0] = QueryPathAnonym{regexp.MustCompile("(T /assets/)(.*)"), "${1}<asset_ref>"}
-	queryAnonyms[1] = QueryPathAnonym{regexp.MustCompile("(T /dossiers/)([0-9]+)"), "${1}<num_dossier>"}
-	queryAnonyms[2] = QueryPathAnonym{regexp.MustCompile("(T /taches/)([0-9]+)"), "${1}<num_tache>"}
+	queryAnonyms[1] = QueryPathAnonym{regexp.MustCompile("([T|D] /(.+?)/)([0-9]+)"), "${1}<number>"}
 }
 
 func (f Record) HeaderStrings() []string {
@@ -98,7 +97,9 @@ func (f *Record) Parse(line string) (err error) {
 		value := loc[2]
 		switch key {
 		case "time":
-			f.Time, err = time.Parse("\"02/Jan/2006:15:04:05 -0700\"", value)
+			v := strings.Split(value, " ")
+			f.Time, err = time.Parse("\"02/Jan/2006:15:04:05", v[0])
+			//f.Time, err = time.Parse("\"02/Jan/2006:15:04:05 -0700\"", value)
 		case "client":
 			f.Client = value
 		case "user":

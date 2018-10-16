@@ -115,7 +115,21 @@ func (qs *QueryStats) Append(record Record) {
 	qs.Query[record.Querypath] = append(qs.Query[record.Querypath], record.RequestTime)
 }
 
-func (qs *QueryStats) CalcDurationPercentile(t time.Time, sq map[string]float64, pcts []float64) stat.Stat {
+func (qs *QueryStats) DurationPercentileQueryStats(pcts []float64) (result *QueryStats) {
+	result = NewQueryStats()
+	for querypath, stats := range qs.Query {
+		valuepcts, _ := percentile(stats, pcts)
+		sum := 0.0
+		for _, v := range stats {
+			sum += v
+		}
+		valuepcts = append(valuepcts, sum, float64(len(stats)), sum/float64(len(stats)))
+		result.Query[querypath] = valuepcts
+	}
+	return
+}
+
+func (qs *QueryStats) CalcDurationPercentileStat(t time.Time, sq map[string]float64, pcts []float64) stat.Stat {
 	res := stat.NewStat(t)
 	for queryPath, durations := range qs.Query {
 		pctDur, _ := percentile(durations, pcts)
@@ -178,7 +192,7 @@ func CalcServerQueryDurationPercentileStats(sqss []ServerQueryStats, pcts []floa
 				sq = newStatsQueries()
 				statsmap[server] = sq
 			}
-			durStat := qs.CalcDurationPercentile(sqs.Time, sq.QuerySet, pcts)
+			durStat := qs.CalcDurationPercentileStat(sqs.Time, sq.QuerySet, pcts)
 			sq.Stats = append(sq.Stats, durStat)
 		}
 	}
@@ -186,6 +200,28 @@ func CalcServerQueryDurationPercentileStats(sqss []ServerQueryStats, pcts []floa
 		servers = append(servers, k)
 	}
 	sort.Strings(servers)
+	return
+}
+
+func CalcServerGlobalQueryDurationPercentileStats(sqss []ServerQueryStats, pcts []float64) (serverstats map[string]*QueryStats) {
+	serverstats = make(map[string]*QueryStats)
+	temp := make(map[string]*QueryStats)
+	for _, sqs := range sqss {
+		for server, qs := range sqs.Servers {
+			querystats, found := temp[server]
+			if !found {
+				querystats = NewQueryStats()
+				temp[server] = querystats
+			}
+			for querypath, stats := range qs.Query {
+				querystats.Query[querypath] = append(querystats.Query[querypath], stats...)
+			}
+		}
+	}
+
+	for server, qs := range temp {
+		serverstats[server] = qs.DurationPercentileQueryStats(pcts)
+	}
 	return
 }
 

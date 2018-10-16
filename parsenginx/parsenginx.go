@@ -16,19 +16,22 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	defaultVisitorInterval int = 30
-	defaultQueryInterval   int = 15
+	defaultVisitorInterval int    = 30
+	defaultQueryInterval   int    = 30
+	defaultServerFilter    string = "talea"
 )
 
 type Options struct {
 	VisitorInterval int
 	QueryInterval   int
+	ServerFilter    string
 	file            string
 }
 
@@ -67,74 +70,37 @@ func (opts Options) processFile(file string) error {
 	serverQueryStat := []nginx.ServerQueryStats{}
 
 	done := make(chan interface{})
-	lines := launchScanner(done, inReader)
-	records := launchParser(done, lines)
-	records1, records2 := tee(done, records)
-	records21, records22 := tee(done, records2)
-	statsVisitorsReady := launchServerVisitorAggregator(done, records21, &serverVisitors, time.Minute*time.Duration(opts.VisitorInterval))
-	statsQuerysReady := launchServerQueryStatsAggregator(done, records22, &serverQueryStat, time.Minute*time.Duration(opts.QueryInterval))
+	lines := opts.launchScanner(done, inReader)
+	records := opts.launchParser(done, lines)
+	//records1, records2 := tee(done, records)
+	records21, records22 := tee(done, records)
+	statsVisitorsReady := opts.launchServerVisitorAggregator(done, records21, &serverVisitors)
+	statsQuerysReady := opts.launchServerQueryStatsAggregator(done, records22, &serverQueryStat)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(3)
 	go GraphUniqueVisitor(wg, statsVisitorsReady, &serverVisitors, opts.file)
-	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, []float64{0.8, 0.9, .99}, opts.file)
+	pcts := []float64{0.8, 0.9, .99}
+	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, pcts, opts.file)
+	go CSVStatsByServerQuerypath(wg, statsQuerysReady, &serverQueryStat, pcts, opts.file)
 
-	t := time.Now()
-	w.Write(nginx.Record{}.HeaderStrings())
-	for f := range records1 {
-		err := w.Write(f.Strings())
-		if err != nil {
-			log.Printf("could not write record: %v\n", err)
-			close(done)
-			continue
-		}
-	}
-	fmt.Printf("Done writing csv file '%s' (took %s)\n", outfile, time.Since(t))
+	//t := time.Now()
+	//w.Write(nginx.Record{}.HeaderStrings())
+	//for f := range records1 {
+	//	err := w.Write(f.Strings())
+	//	if err != nil {
+	//		log.Printf("could not write record: %v\n", err)
+	//		close(done)
+	//		continue
+	//	}
+	//}
+	//fmt.Printf("Done writing csv file '%s' (took %s)\n", outfile, time.Since(t))
 
 	wg.Wait()
 	return nil
 }
 
-func main() {
-	opts := Options{
-		VisitorInterval: defaultVisitorInterval,
-		QueryInterval:   defaultQueryInterval,
-	}
-
-	flag.IntVar(&opts.VisitorInterval, "v", defaultVisitorInterval, "Unique Visitor interval (n minutes)")
-	flag.IntVar(&opts.QueryInterval, "q", defaultQueryInterval, "Query Duration interval (n minutes)")
-	flag.Parse()
-
-	if len(flag.Args()) == 0 {
-		log.Fatalf(`Usage : %s <filename1>.log[.gz] [<filename2>.log[.gz]...] (one or more NGinx access.log[.gz] files, gziped or not)
-Will produce (per given files):
-	- access.csv                   (csv file with formated stats for XLS usage)
-	- access.queries.<host>.#.png  (png files per hosts, showing Query duration info (from longuest to shortest))
-	- access.visitors.png          (png file showing Unique Visitor stat per Host Server)
-`,
-			filepath.Base(os.Args[0]))
-	}
-
-	for _, file := range flag.Args() {
-		fmt.Printf("Processing '%s' ...\n", file)
-		err := opts.processFile(file)
-		if err != nil {
-			log.Printf("processing aborted: %v\n", err)
-		}
-
-	}
-}
-
-func outFile(infile, ext string) string {
-	return filepath.Join(filepath.Dir(infile), strings.Replace(filepath.Base(infile), filepath.Ext(infile), ext, -1))
-}
-
-type Entry struct {
-	NumLine int64
-	Line    string
-}
-
-func launchScanner(done chan interface{}, r io.Reader) (lineChan <-chan Entry) {
+func (opts Options) launchScanner(done chan interface{}, r io.Reader) (lineChan <-chan Entry) {
 	out := make(chan Entry)
 	fs := bufio.NewScanner(r)
 	go func(s *bufio.Scanner, c chan<- Entry) {
@@ -161,7 +127,7 @@ func launchScanner(done chan interface{}, r io.Reader) (lineChan <-chan Entry) {
 	return out
 }
 
-func launchParser(done chan interface{}, entries <-chan Entry) (out <-chan nginx.Record) {
+func (opts Options) launchParser(done chan interface{}, entries <-chan Entry) (out <-chan nginx.Record) {
 	outChan := make(chan nginx.Record)
 	go func(done chan interface{}, entries <-chan Entry, out chan<- nginx.Record) {
 		defer close(out)
@@ -171,6 +137,9 @@ func launchParser(done chan interface{}, entries <-chan Entry) (out <-chan nginx
 			err := field.Parse(entry.Line)
 			if err != nil {
 				log.Printf("line %d: skipping record: %v", entry.NumLine, err)
+				continue
+			}
+			if !strings.Contains(field.Host, opts.ServerFilter) {
 				continue
 			}
 			select {
@@ -185,7 +154,7 @@ func launchParser(done chan interface{}, entries <-chan Entry) (out <-chan nginx
 	return outChan
 }
 
-func launchServerVisitorAggregator(done chan interface{}, records <-chan nginx.Record, serversVisitor *[]nginx.ServerVisitor, timelaps time.Duration) (terminated <-chan interface{}) {
+func (opts Options) launchServerVisitorAggregator(done chan interface{}, records <-chan nginx.Record, serversVisitor *[]nginx.ServerVisitor) (terminated <-chan interface{}) {
 	finished := make(chan interface{})
 	go func(done chan interface{}, records <-chan nginx.Record, timelaps time.Duration) {
 		defer close(finished)
@@ -207,11 +176,11 @@ func launchServerVisitorAggregator(done chan interface{}, records <-chan nginx.R
 			curServVisitor.Append(record)
 		}
 		*serversVisitor = append(*serversVisitor, curServVisitor)
-	}(done, records, timelaps)
+	}(done, records, time.Duration(opts.VisitorInterval)*time.Minute)
 	return finished
 }
 
-func launchServerQueryStatsAggregator(done chan interface{}, records <-chan nginx.Record, serversQueryStats *[]nginx.ServerQueryStats, timelaps time.Duration) (terminated <-chan interface{}) {
+func (opts Options) launchServerQueryStatsAggregator(done chan interface{}, records <-chan nginx.Record, serversQueryStats *[]nginx.ServerQueryStats) (terminated <-chan interface{}) {
 	finished := make(chan interface{})
 	go func(done chan interface{}, records <-chan nginx.Record, timelaps time.Duration) {
 		defer close(finished)
@@ -233,7 +202,7 @@ func launchServerQueryStatsAggregator(done chan interface{}, records <-chan ngin
 			curServQStats.Append(record)
 		}
 		*serversQueryStats = append(*serversQueryStats, curServQStats)
-	}(done, records, timelaps)
+	}(done, records, time.Duration(opts.QueryInterval)*time.Minute)
 	return finished
 }
 
@@ -244,7 +213,7 @@ func GraphUniqueVisitor(wg *sync.WaitGroup, statsVisitorsReady <-chan interface{
 	servUniqVisitorsStats, servList := nginx.CalcServerVisitorStats(*serverVisitors)
 	nbLines := 4
 	// splot1 := gfx.NewSinglePlot("Unique Visitors", servUniqVisitorsStats)
-	grapher := newGrapher(nbLines, 2, "Unique Visitor (same @IP and webbrowser)", servUniqVisitorsStats)
+	grapher := newGrapher(nbLines, 2, "Unique Visitor (same @IP and webbrowser)", "visitors", servUniqVisitorsStats)
 	colors := genPalette(nbLines, 0.9, 1)
 	for i, server := range servList {
 		grapher.AddLine(server, colors[i%nbLines])
@@ -257,6 +226,7 @@ func GraphUniqueVisitor(wg *sync.WaitGroup, statsVisitorsReady <-chan interface{
 	}
 	fmt.Printf("Generating Unique Visitors Stats Graph (took %s)\n", time.Since(t))
 }
+
 func GraphQueryDuration(wg *sync.WaitGroup, statsQuerysReady <-chan interface{}, serverQueryStat *[]nginx.ServerQueryStats, pcts []float64, infile string) {
 	defer wg.Done()
 	<-statsQuerysReady
@@ -265,7 +235,7 @@ func GraphQueryDuration(wg *sync.WaitGroup, statsQuerysReady <-chan interface{},
 	nbLines := 3 * len(pcts)
 	for _, server := range servList {
 
-		grapher := newGrapher(nbLines, 3, "Query Duration on "+server, servQueriesStats[server].Stats)
+		grapher := newGrapher(nbLines, 3, "Query Duration on "+server, "Seconds", servQueriesStats[server].Stats)
 
 		// Calc sorted DurationSeries name list
 		qsnames := []string{}
@@ -295,17 +265,60 @@ func GraphQueryDuration(wg *sync.WaitGroup, statsQuerysReady <-chan interface{},
 	fmt.Printf("Generating Query Duration Stats Graph (took %s)\n", time.Since(t))
 }
 
+func CSVStatsByServerQuerypath(wg *sync.WaitGroup, statsQuerysReady <-chan interface{}, serverQueryStat *[]nginx.ServerQueryStats, pcts []float64, infile string) {
+	defer wg.Done()
+	<-statsQuerysReady
+
+	outfile := outFile(infile, ".stats.csv")
+	of, err := os.Create(outfile)
+	if err != nil {
+		log.Printf("could not create stat file: %v\n", err)
+	}
+	defer of.Close()
+	ow := csv.NewWriter(of)
+	ow.Comma = ';'
+	defer ow.Flush()
+
+	header := []string{"server", "querypath"}
+	for _, v := range pcts {
+		header = append(header, fmt.Sprintf("p%.1f%%", v*100))
+	}
+	header = append(header, "TotDuration", "NbCall", "MeanDuration")
+	err = ow.Write(header)
+	if err != nil {
+		log.Printf("error while writing: %v\n", err)
+		return
+	}
+	t := time.Now()
+	for server, qs := range nginx.CalcServerGlobalQueryDurationPercentileStats(*serverQueryStat, pcts) {
+		for querypath, stats := range qs.Query {
+			record := []string{server, querypath}
+			for _, v := range stats {
+				record = append(record, strings.Replace(strconv.FormatFloat(v, 'f', 4, 64), ".", ",", 1))
+			}
+			err = ow.Write(record)
+			if err != nil {
+				log.Printf("error while writing: %v\n", err)
+				return
+			}
+		}
+	}
+	fmt.Printf("Generating Query Duration Stats CSV (took %s)\n", time.Since(t))
+}
+
 type grapher struct {
 	title      string
+	yLabel     string
 	stats      []stat.Stat
 	splots     []*gfx.SinglePlot
 	lineLimit  int
 	graphLimit int
 }
 
-func newGrapher(lineLimit, graphLimit int, title string, stats []stat.Stat) grapher {
+func newGrapher(lineLimit, graphLimit int, title, ylabel string, stats []stat.Stat) grapher {
 	return grapher{
 		title:      title,
+		yLabel:     ylabel,
 		stats:      stats,
 		lineLimit:  lineLimit,
 		graphLimit: graphLimit,
@@ -315,7 +328,7 @@ func newGrapher(lineLimit, graphLimit int, title string, stats []stat.Stat) grap
 func (g *grapher) AddLine(valueSet string, c color.RGBA) {
 	curPlot := len(g.splots) - 1
 	if curPlot < 0 || g.splots[curPlot].NbLines() == g.lineLimit {
-		g.splots = append(g.splots, gfx.NewSinglePlot(g.title, g.stats))
+		g.splots = append(g.splots, gfx.NewSinglePlot(g.title, g.yLabel, g.stats))
 		curPlot++
 	}
 	g.splots[curPlot].AddLine(valueSet, c)
@@ -340,6 +353,52 @@ func (g *grapher) GenGraph(infile string, fileExtention func(numGraph int) strin
 		numGraph++
 	}
 	return nil
+}
+
+func outFile(infile, ext string) string {
+	return filepath.Join(filepath.Dir(infile), strings.Replace(filepath.Base(infile), filepath.Ext(infile), ext, -1))
+}
+
+type Entry struct {
+	NumLine int64
+	Line    string
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Main function
+//
+
+func main() {
+	opts := Options{
+		VisitorInterval: defaultVisitorInterval,
+		QueryInterval:   defaultQueryInterval,
+		ServerFilter:    defaultServerFilter,
+	}
+
+	flag.IntVar(&opts.VisitorInterval, "v", defaultVisitorInterval, "Unique Visitor interval in minutes")
+	flag.IntVar(&opts.QueryInterval, "q", defaultQueryInterval, "Query Duration interval in minutes")
+	flag.StringVar(&opts.ServerFilter, "s", defaultServerFilter, "Server name filter")
+	flag.Parse()
+
+	if len(flag.Args()) == 0 {
+		log.Fatalf(`Usage : %s <filename1>.log[.gz] [<filename2>.log[.gz]...] (one or more NGinx access.log[.gz] files, gziped or not)
+Will produce (per given files):
+	- access.csv                   (csv file with formated stats for XLS usage)
+	- access.queries.<host>.#.png  (png files per hosts, showing Query duration info (from longuest to shortest))
+	- access.visitors.png          (png file showing Unique Visitor stat per Host Server)
+`,
+			filepath.Base(os.Args[0]))
+	}
+
+	for _, file := range flag.Args() {
+		fmt.Printf("Processing '%s' ...\n", file)
+		err := opts.processFile(file)
+		if err != nil {
+			log.Printf("processing aborted: %v\n", err)
+		}
+
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

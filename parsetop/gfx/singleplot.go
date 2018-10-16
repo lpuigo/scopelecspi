@@ -11,13 +11,14 @@ import (
 )
 
 type SinglePlot struct {
-	title string
-	stats []stat.Stat
-	lines []lineInfo
+	title  string
+	stats  []stat.Stat
+	lines  []lineInfo
+	yLabel string
 }
 
-func NewSinglePlot(title string, s []stat.Stat) *SinglePlot {
-	return &SinglePlot{title: title, stats: s}
+func NewSinglePlot(title, ylabel string, s []stat.Stat) *SinglePlot {
+	return &SinglePlot{title: title, yLabel: ylabel, stats: s}
 }
 
 func (sp *SinglePlot) AddLine(valueSet string, c color.RGBA) {
@@ -54,7 +55,7 @@ func (sp *SinglePlot) plotLines() (p *plot.Plot, err error) {
 	p.Title.Text = sp.title
 	p.X.Tick.Marker = plot.TimeTicks{Format: "2006-01-02\n15:04", Ticker: TimeTicker{Minor: 15}}
 	p.X.Label.Text = "Time"
-	p.Y.Label.Text = "Values"
+	p.Y.Label.Text = sp.yLabel
 
 	for _, line := range sp.lines {
 		_, err = newLine(p, sp.stats, line.valueSet, line.color)

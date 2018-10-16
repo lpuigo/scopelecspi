@@ -44,9 +44,10 @@ func (qpa QueryPathAnonym) Anonymize(s string) string {
 
 func init() {
 	re = regexp.MustCompile(`(\w+)=(".+?"|\S+)`)
-	queryAnonyms = make([]QueryPathAnonym, 2)
+	queryAnonyms = make([]QueryPathAnonym, 3)
 	queryAnonyms[0] = QueryPathAnonym{regexp.MustCompile("(T /assets/)(.*)"), "${1}<asset_ref>"}
-	queryAnonyms[1] = QueryPathAnonym{regexp.MustCompile("([T|D] /(.+?)/)([0-9]+)"), "${1}<number>"}
+	queryAnonyms[1] = QueryPathAnonym{regexp.MustCompile("(T /Documents/)(.*)"), "${1}<document_ref>"}
+	queryAnonyms[2] = QueryPathAnonym{regexp.MustCompile("([T|D] /(.+?)/)([0-9]+)"), "${1}<number>"}
 }
 
 func (f Record) HeaderStrings() []string {

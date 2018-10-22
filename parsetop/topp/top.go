@@ -166,9 +166,9 @@ func parseProcessBlock(s *stat.Stat, rs *bufio.Scanner) error {
 			prog = "MySQL"
 		} else {
 			switch fields[processBlock_progName] {
-			case "Passenger", "sidekiq":
+			case "Passenger":
 				prog = "Ruby"
-			case "/usr/local/rvm/rubies/ruby-2.3.0/bin/ruby":
+			case "/usr/local/rvm/rubies/ruby-2.3.0/bin/ruby", "sidekiq":
 				prog = "Rails"
 			default:
 				continue

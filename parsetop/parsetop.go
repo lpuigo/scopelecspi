@@ -110,20 +110,23 @@ func (opt *Options) GenTopImg(statfile string) (resfile string, err error) {
 
 	for _, statset := range ssets {
 		splot1 := gfx.NewSinglePlot("Server Stats", "Load Average", statset.Stats)
-		splot1.AddLine("Load 1min", color.RGBA{B: 255, A: 255})
-		splot1.AddLine("WaitState", color.RGBA{G: 150, A: 255})
+		splot1.AddLine("Load 1min", color.RGBA{64, 132, 209, 255})
+		splot1.AddLine("WaitState", color.RGBA{221, 0, 0, 255})
 
 		splot2 := gfx.NewSinglePlot("CPU Stats", "CPU Usage", statset.Stats)
-		splot2.AddLine("MySQL %CPU", color.RGBA{R: 255, A: 255})
-		splot2.AddLine("Ruby %CPU", color.RGBA{G: 255, A: 255})
-		splot2.AddLine("Rails %CPU", color.RGBA{B: 255, A: 255})
+		splot2.AddLine("MySQL %CPU", color.RGBA{234, 0, 195, 255})
+		splot2.AddLine("Rails %CPU", color.RGBA{0, 125, 127, 255})
+		splot2.AddLine("Ruby %CPU", color.RGBA{0, 215, 226, 255})
 
 		splot3 := gfx.NewSinglePlot("Memory Stats", "MegaBytes", statset.Stats)
-		splot3.AddLine("FreeMem", color.RGBA{G: 155, A: 255})
-		splot3.AddLine("UsedMem", color.RGBA{R: 155, G: 255, A: 255})
-		splot3.AddLine("MySQL RAM", color.RGBA{R: 255, A: 255})
-		splot3.AddLine("MySQL Virtual", color.RGBA{R: 255, G: 128, A: 255})
-		splot3.AddLine("SwapMem", color.RGBA{R: 128, B: 128, A: 255})
+		//splot3.AddLine("FreeMem", color.RGBA{R:0, G:155, B:33, A: 255})
+		splot3.AddLine("UsedMem", color.RGBA{R: 0, G: 239, B: 55, A: 255})
+		splot3.AddLine("SwapMem", color.RGBA{221, 0, 0, 255})
+		splot3.AddLine("MySQL RAM", color.RGBA{234, 0, 195, 255})
+		//splot3.AddLine("MySQL Virtual", color.RGBA{R:106, G:149, B:165, A: 255})
+		splot3.AddLine("Rails RAM", color.RGBA{0, 125, 127, 255})
+		splot3.AddLine("Ruby RAM", color.RGBA{0, 215, 226, 255})
+		//splot3.AddLine("MySQL Virtual", color.RGBA{R:106, G:149, B:165, A: 255})
 
 		mplot := gfx.NewMultiPlot(splot1, splot2, splot3)
 		err = mplot.AlignVertical()

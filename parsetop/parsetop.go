@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"github.com/lpuig/scopelecspi/parsetop/gfx"
@@ -8,6 +9,7 @@ import (
 	"github.com/lpuig/scopelecspi/parsetop/statset"
 	"github.com/lpuig/scopelecspi/parsetop/topp"
 	"image/color"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -51,8 +53,17 @@ func main() {
 }
 
 func (opt *Options) GenTopImg(statfile string) (resfile string, err error) {
+	var uncompress bool
+	if filepath.Ext(statfile) == ".gz" {
+		uncompress = true
+	}
+
 	basefile := filepath.Base(statfile)
 	basefile = strings.Replace(basefile, filepath.Ext(basefile), "", -1)
+	if uncompress {
+		// previous replace just remove the .gz, redo it for actual file extension (.txt)
+		basefile = strings.Replace(basefile, filepath.Ext(basefile), "", -1)
+	}
 	resfile = filepath.Join(filepath.Dir(statfile), basefile)
 
 	f, err := os.Open(statfile)
@@ -61,6 +72,16 @@ func (opt *Options) GenTopImg(statfile string) (resfile string, err error) {
 		return
 	}
 	defer f.Close()
+
+	var fr io.Reader = f
+	if uncompress {
+		gzr, err := gzip.NewReader(f)
+		if err != nil {
+			return resfile, err
+		}
+		defer gzr.Close()
+		fr = gzr
+	}
 
 	c := make(chan stat.Stat)
 	vector := sync.WaitGroup{}
@@ -77,7 +98,7 @@ func (opt *Options) GenTopImg(statfile string) (resfile string, err error) {
 
 	topDef := topp.NewTopParserDef()
 
-	err = topp.Parse(f, topDef, c)
+	err = topp.Parse(fr, topDef, c)
 	if err != nil {
 		err = fmt.Errorf("could not parse file: %v", err)
 		return
@@ -88,16 +109,16 @@ func (opt *Options) GenTopImg(statfile string) (resfile string, err error) {
 	ssets := statset.NewStatSet(Stats, opt.Split)
 
 	for _, statset := range ssets {
-		splot1 := gfx.NewSinglePlot("Server Stats", statset.Stats)
+		splot1 := gfx.NewSinglePlot("Server Stats", "Load Average", statset.Stats)
 		splot1.AddLine("Load 1min", color.RGBA{B: 255, A: 255})
 		splot1.AddLine("WaitState", color.RGBA{G: 150, A: 255})
 
-		splot2 := gfx.NewSinglePlot("CPU Stats", statset.Stats)
+		splot2 := gfx.NewSinglePlot("CPU Stats", "CPU Usage", statset.Stats)
 		splot2.AddLine("MySQL %CPU", color.RGBA{R: 255, A: 255})
 		splot2.AddLine("Ruby %CPU", color.RGBA{G: 255, A: 255})
 		splot2.AddLine("Rails %CPU", color.RGBA{B: 255, A: 255})
 
-		splot3 := gfx.NewSinglePlot("Memory Stats", statset.Stats)
+		splot3 := gfx.NewSinglePlot("Memory Stats", "MegaBytes", statset.Stats)
 		splot3.AddLine("FreeMem", color.RGBA{G: 155, A: 255})
 		splot3.AddLine("UsedMem", color.RGBA{R: 155, G: 255, A: 255})
 		splot3.AddLine("MySQL RAM", color.RGBA{R: 255, A: 255})

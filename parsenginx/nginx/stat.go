@@ -43,12 +43,12 @@ type ServerVisitor struct {
 }
 
 func (sv *ServerVisitor) Prepare(t time.Time, dur time.Duration) {
-	sv.Time = t.Round(dur)
+	sv.Time = t.Truncate(dur)
 	sv.Servers = make(map[string]*UniqueVisitor)
 }
 
 func (sv *ServerVisitor) IsContiguous(t time.Time, dur time.Duration) bool {
-	return t.Round(dur).Equal(sv.Time)
+	return t.Truncate(dur).Equal(sv.Time)
 }
 
 func (sv *ServerVisitor) Append(record Record) {
@@ -155,12 +155,12 @@ type ServerQueryStats struct {
 }
 
 func (sqs *ServerQueryStats) Prepare(t time.Time, dur time.Duration) {
-	sqs.Time = t.Round(dur)
+	sqs.Time = t.Truncate(dur)
 	sqs.Servers = make(map[string]*QueryStats)
 }
 
 func (sqs *ServerQueryStats) IsContiguous(t time.Time, dur time.Duration) bool {
-	return t.Round(dur).Equal(sqs.Time)
+	return t.Truncate(dur).Equal(sqs.Time)
 }
 
 func (sqs *ServerQueryStats) Append(record Record) {

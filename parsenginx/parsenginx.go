@@ -55,16 +55,16 @@ func (opts Options) processFile(file string) error {
 		opts.file = strings.Replace(opts.file, ".gz", "", -1)
 	}
 
-	outfile := outFile(opts.file, ".csv")
-	of, err := os.Create(outfile)
-	if err != nil {
-		return fmt.Errorf("could not create file: %v", err)
-	}
-	defer of.Close()
-
-	w := csv.NewWriter(of)
-	w.Comma = ';'
-	defer w.Flush()
+	//outfile := outFile(opts.file, ".csv")
+	//of, err := os.Create(outfile)
+	//if err != nil {
+	//	return fmt.Errorf("could not create file: %v", err)
+	//}
+	//defer of.Close()
+	//
+	//w := csv.NewWriter(of)
+	//w.Comma = ';'
+	//defer w.Flush()
 
 	serverVisitors := []nginx.ServerVisitor{}
 	serverQueryStat := []nginx.ServerQueryStats{}

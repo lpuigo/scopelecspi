@@ -90,7 +90,7 @@ func (tt TimeTicker) Ticks(min, max float64) []plot.Tick {
 	totime := plot.UTCUnixTime
 	// find the first tick
 	starttime := totime(min)
-	roundedstarttime := starttime.Round(minDur)
+	roundedstarttime := starttime.Truncate(minDur)
 	if roundedstarttime.Before(starttime) {
 		roundedstarttime = roundedstarttime.Add(minDur)
 	}
@@ -99,7 +99,7 @@ func (tt TimeTicker) Ticks(min, max float64) []plot.Tick {
 	for value < max {
 		tick := plot.Tick{Value: value}
 		t := totime(value)
-		if t.Round(time.Duration(tt.Minor*tt.Major) * time.Minute).Equal(t) {
+		if t.Truncate(time.Duration(tt.Minor*tt.Major) * time.Minute).Equal(t) {
 			tick.Label = "1"
 		}
 		ticks = append(ticks, tick)
@@ -121,7 +121,7 @@ func (tt *TimeTicker) setTicks(min, max float64) {
 		60:   3,
 		180:  4,
 		240:  6,
-		1440: 7,
+		1440: 2,
 	}
 	const lowTicks float64 = 20
 	const highTicks float64 = 40

@@ -22,4 +22,6 @@ linux/
 
 # test txt & log files
 *.txt
+*.gz
 *.log
+*.png

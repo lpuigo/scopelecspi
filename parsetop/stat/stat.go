@@ -91,7 +91,7 @@ func FillAggregatedStatVector(wg *sync.WaitGroup, cIn <-chan Stat, w *[]Stat, ti
 	}
 
 	for s := range cIn {
-		rtime := s.Time.Round(tick)
+		rtime := s.Time.Truncate(tick)
 		if !current.Time.Equal(rtime) {
 			// It's a new slot
 			// first, append current one if exist

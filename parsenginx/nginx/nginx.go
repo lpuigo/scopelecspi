@@ -163,6 +163,7 @@ func (f *Record) RequestInfo() (scheme, host, querypath, URI string) {
 	if host == "" {
 		host = "localhost"
 	}
+	host = strings.Split(host, ".")[0]
 	queryPath := fmt.Sprintf("%s %s", f.Method, u2.Path)
 	for _, qa := range queryAnonyms {
 		q := qa.Anonymize(queryPath)

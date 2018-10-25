@@ -33,6 +33,9 @@ type Options struct {
 	QueryInterval   int
 	ServerFilter    string
 	file            string
+	MinDate         DateValue
+	MaxDate         DateValue
+	Pcts            []float64
 }
 
 func (opts Options) processFile(file string) error {
@@ -80,9 +83,8 @@ func (opts Options) processFile(file string) error {
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
 	go GraphUniqueVisitor(wg, statsVisitorsReady, &serverVisitors, opts.file)
-	pcts := []float64{0.8, 0.9, .99}
-	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, pcts, opts.file)
-	go CSVStatsByServerQuerypath(wg, statsQuerysReady, &serverQueryStat, pcts, opts.file)
+	go GraphQueryDuration(wg, statsQuerysReady, &serverQueryStat, opts.Pcts[4:], opts.file)
+	go CSVStatsByServerQuerypath(wg, statsQuerysReady, &serverQueryStat, opts.Pcts, opts.file)
 
 	//t := time.Now()
 	//w.Write(nginx.Record{}.HeaderStrings())
@@ -133,10 +135,18 @@ func (opts Options) launchParser(done chan interface{}, entries <-chan Entry) (o
 		defer close(out)
 		field := nginx.Record{}
 		t := time.Now()
+		checkMinDate := !opts.MinDate.IsZero()
+		checkMaxDate := !opts.MaxDate.IsZero()
 		for entry := range entries {
 			err := field.Parse(entry.Line)
 			if err != nil {
 				log.Printf("line %d: skipping record: %v", entry.NumLine, err)
+				continue
+			}
+			if checkMinDate && field.Time.Before(time.Time(opts.MinDate)) {
+				continue
+			}
+			if checkMaxDate && field.Time.After(time.Time(opts.MaxDate)) {
 				continue
 			}
 			if !strings.Contains(field.Host, opts.ServerFilter) {
@@ -232,7 +242,7 @@ func GraphQueryDuration(wg *sync.WaitGroup, statsQuerysReady <-chan interface{},
 	<-statsQuerysReady
 	t := time.Now()
 	servQueriesStats, servList := nginx.CalcServerQueryDurationPercentileStats(*serverQueryStat, pcts)
-	nbLines := 3 * len(pcts)
+	nbLines := 1 * len(pcts)
 	for _, server := range servList {
 
 		grapher := newGrapher(nbLines, 3, "Query Duration on "+server, "Seconds", servQueriesStats[server].Stats)
@@ -369,16 +379,48 @@ type Entry struct {
 // Main function
 //
 
+const (
+	DateValueFormat string = "2006-01-02"
+)
+
+type DateValue time.Time
+
+func (dv *DateValue) Set(s string) error {
+	if s == "" {
+		return nil
+	}
+	t, err := time.Parse(DateValueFormat, s)
+	if err != nil {
+		return err
+	}
+	*dv = DateValue(t)
+	return nil
+}
+
+func (dv DateValue) String() string {
+	if time.Time(dv).IsZero() {
+		return ""
+	}
+	return time.Time(dv).Format(DateValueFormat)
+}
+
+func (dv DateValue) IsZero() bool {
+	return time.Time(dv).IsZero()
+}
+
 func main() {
 	opts := Options{
 		VisitorInterval: defaultVisitorInterval,
 		QueryInterval:   defaultQueryInterval,
 		ServerFilter:    defaultServerFilter,
+		Pcts:            []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99},
 	}
 
 	flag.IntVar(&opts.VisitorInterval, "v", defaultVisitorInterval, "Unique Visitor interval in minutes")
 	flag.IntVar(&opts.QueryInterval, "q", defaultQueryInterval, "Query Duration interval in minutes")
 	flag.StringVar(&opts.ServerFilter, "s", defaultServerFilter, "Server name filter")
+	flag.Var(&opts.MinDate, "a", "Keep values After given date (format YYYY-MM-DD)")
+	flag.Var(&opts.MaxDate, "b", "Keep values Before given date (format YYYY-MM-DD)")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {

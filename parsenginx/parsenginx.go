@@ -15,6 +15,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
+	"runtime/trace"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +38,8 @@ type Options struct {
 	MinDate         DateValue
 	MaxDate         DateValue
 	Pcts            []float64
+	Trace           bool
+	Pprof           bool
 }
 
 func (opts Options) processFile(file string) error {
@@ -103,7 +107,7 @@ func (opts Options) processFile(file string) error {
 }
 
 func (opts Options) launchScanner(done chan interface{}, r io.Reader) (lineChan <-chan Entry) {
-	out := make(chan Entry)
+	out := make(chan Entry, 50)
 	fs := bufio.NewScanner(r)
 	go func(s *bufio.Scanner, c chan<- Entry) {
 		defer close(c)
@@ -381,6 +385,8 @@ type Entry struct {
 
 const (
 	DateValueFormat string = "2006-01-02"
+	TraceFile       string = "trace.out"
+	PprofFile       string = "pprof.out"
 )
 
 type DateValue time.Time
@@ -419,6 +425,8 @@ func main() {
 	flag.IntVar(&opts.VisitorInterval, "v", defaultVisitorInterval, "Unique Visitor interval in minutes")
 	flag.IntVar(&opts.QueryInterval, "q", defaultQueryInterval, "Query Duration interval in minutes")
 	flag.StringVar(&opts.ServerFilter, "s", defaultServerFilter, "Server name filter")
+	flag.BoolVar(&opts.Trace, "trace", false, "generate trace file (for dev analysis purpose only)")
+	flag.BoolVar(&opts.Pprof, "pprof", false, "generate pprof file (for dev analysis purpose only)")
 	flag.Var(&opts.MinDate, "a", "Keep values After given date (format YYYY-MM-DD)")
 	flag.Var(&opts.MaxDate, "b", "Keep values Before given date (format YYYY-MM-DD)")
 	flag.Parse()
@@ -431,6 +439,32 @@ Will produce (per given files):
 	- access.visitors.png          (png file showing Unique Visitor stat per Host Server)
 `,
 			filepath.Base(os.Args[0]))
+	}
+
+	if opts.Trace {
+		traceF, err := os.Create(TraceFile)
+		if err != nil {
+			log.Fatalf("could not create trace file : %v", err)
+		}
+		defer traceF.Close()
+
+		err = trace.Start(traceF)
+		if err != nil {
+			log.Fatalf("could not strat trace : %v", err)
+		}
+		defer trace.Stop()
+		log.Printf("Producing traces in '%s'\n", TraceFile)
+	}
+	if opts.Pprof {
+		pprofF, err := os.Create(PprofFile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer pprofF.Close()
+		if err := pprof.StartCPUProfile(pprofF); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
 	}
 
 	for _, file := range flag.Args() {

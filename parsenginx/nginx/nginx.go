@@ -88,7 +88,77 @@ func (f *Record) Strings() []string {
 	}
 }
 
+func trimLine(line, key, nextkey string) (value string, remaing string) {
+	start := strings.Index(line, key)
+	if start == -1 {
+		return "", line
+	}
+
+	lkey := len(key)
+	if nextkey == "" {
+		return strings.Trim(line[start+lkey:], `" `), ""
+	}
+
+	end := strings.Index(line[start+lkey:], nextkey)
+	if end == -1 {
+		return "", line
+	}
+	end += lkey - 1
+	return strings.Trim(line[start+lkey:start+end], `" `), line[start+end+1:]
+}
+
 func (f *Record) Parse(line string) (err error) {
+	// parse info with given pattern :
+	// time=xxx client=xxx user=xxx method=xxx request=xxx request_length=xxx status=xxx bytes_sent=xxx ...
+	// ... body_bytes_sent=xxx referer=xxx user_agent=xxx upstream_addr=xxx upstream_status=xxx ...
+	// ... request_time=xxx upstream_response_time=xxx upstream_header_time=xxx
+	value, line := trimLine("time="+line, "time=", "client=")
+	v := strings.Split(value, " ")
+	f.Time, err = time.Parse("02/Jan/2006:15:04:05", v[0])
+	if err != nil {
+		return
+	}
+	f.Client, line = trimLine(line, "client=", "user=")
+	f.User, line = trimLine(line, "user=", "method=")
+	f.Method, line = trimLine(line, "method=", "request=")
+	f.Request, line = trimLine(line, "request=", "request_length=")
+	f.Status, line = trimLine(line, "status=", "bytes_sent=")
+	f.Referer, line = trimLine(line, "referer=", "user_agent=")
+	f.UserAgent, line = trimLine(line, "user_agent=", "upstream_addr=")
+	f.UpstreamAddr, line = trimLine(line, "upstream_addr=", "upstream_status=")
+	f.UpstreamStatus, line = trimLine(line, "upstream_status=", "request_time=")
+	value, line = trimLine(line, "request_time=", "upstream_response_time=")
+	if value == "-" {
+		f.RequestTime = 0
+	} else {
+		f.RequestTime, err = strconv.ParseFloat(value, 64)
+		if err != nil {
+			return
+		}
+	}
+	value, line = trimLine(line, "upstream_response_time=", "upstream_header_time=")
+	if value == "-" {
+		f.UpstreamResponseTime = 0
+	} else {
+		f.UpstreamResponseTime, err = strconv.ParseFloat(value, 64)
+		if err != nil {
+			return
+		}
+	}
+	value, line = trimLine(line, "upstream_header_time=", "")
+	if value == "-" {
+		f.UpstreamHeaderTime = 0
+	} else {
+		f.UpstreamHeaderTime, err = strconv.ParseFloat(value, 64)
+		if err != nil {
+			return
+		}
+	}
+	f.Scheme, f.Host, f.Querypath, f.Uri = f.RequestInfo()
+	return
+}
+
+func (f *Record) ParseOld(line string) (err error) {
 	allIndexes := re.FindAllStringSubmatch("time="+line, -1)
 	if allIndexes == nil {
 		return fmt.Errorf("not a nginx record")
